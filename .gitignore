@@ -196,3 +196,9 @@ output/
 logs/
 *.log
 results/
+
+# API keys and secrets
+src/fire_spread/constants.py
+
+# Weather data cache
+data/weather_cache/
