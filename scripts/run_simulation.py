@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Main script to run the fire spread simulation."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -9,8 +10,12 @@ project_root = Path(__file__).parent.parent
 src_path = project_root / "src"
 sys.path.insert(0, str(src_path))
 
+from fire_spread.logging_config import setup_logging
 from fire_spread.model import FireModel
 from fire_spread.cell import CellState
+
+# Set up logging
+logger = setup_logging(level=logging.INFO)
 
 
 def print_grid(model: FireModel) -> None:
@@ -44,7 +49,7 @@ def main():
     STEPS = 50
 
     # Initialize model
-    print("--- CREATING MODEL ---")
+    logger.info("Creating fire spread model (%dx%d)", WIDTH, HEIGHT)
     model = FireModel(WIDTH, HEIGHT)
 
     # Set starting fire point
@@ -55,9 +60,9 @@ def main():
         center_cell.state = CellState.Burning
         center_cell.next_state = CellState.Burning
         center_cell.burn_timer = int(center_cell.fuel.burn_time)
-        print(f"Ignited cell at position ({x_start}, {y_start})")
+        logger.info("Ignited cell at position (%d, %d)", x_start, y_start)
     else:
-        print("Cannot ignite starting cell.")
+        logger.warning("Cannot ignite starting cell at (%d, %d)", x_start, y_start)
 
     print("--- INITIAL STATE (AFTER IGNITION) ---")
     print_grid(model)
@@ -71,8 +76,11 @@ def main():
         # Check if fire is still burning
         is_burning = any(c.state == CellState.Burning for c in model.agents)
         if not is_burning:
+            logger.info("Fire extinguished after %d steps", i + 1)
             print("\nFire has been extinguished.")
             break
+    else:
+        logger.info("Simulation completed after %d steps", STEPS)
 
 
 if __name__ == "__main__":

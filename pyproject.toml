@@ -27,6 +27,7 @@ keywords = ["cellular-automata", "fire-simulation", "mesa", "agent-based-modelin
 
 dependencies = [
     "mesa>=3.0.0",
+    "requests>=2.31.0",
 ]
 
 [project.optional-dependencies]
