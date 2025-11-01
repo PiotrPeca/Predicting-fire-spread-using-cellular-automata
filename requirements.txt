@@ -1,5 +1,6 @@
 # Core dependencies
 mesa>=3.0.0
+pygame
 
 # Data analysis (optional, for future enhancements)
 # numpy>=1.24.0
