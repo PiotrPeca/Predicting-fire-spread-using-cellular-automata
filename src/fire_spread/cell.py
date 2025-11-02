@@ -61,6 +61,24 @@ class ForestCell(Agent):
         self.burn_timer = int(fuel.burn_time) if state == CellState.Burning else 0
         self.next_state = state
 
+    def add_two_pos(
+        self, 
+        pos1: list[int, int], 
+        pos2: list[int, int]
+    ) -> list[int, int]:
+        """
+        Add two position vectors.
+
+        Args:
+            pos1: First position vector [x1, y1]
+            pos2: Second position vector [x2, y2]
+        
+        Returns:
+            Resulting position vector [x1 + x2, y1 + y2]
+        """
+        pos_result = [x + y for x, y in zip(pos1, pos2)]
+        return pos_result
+    
     def is_burnable(self) -> bool:
         """
         Check if the cell can catch fire.
@@ -79,17 +97,29 @@ class ForestCell(Agent):
         Returns:
             Probability value between 0 and 1 based on burning neighbors
         """
-        burning_chance = 0.0
-        neighbors = self.model.grid.get_neighbors(
-            self.pos, 
-            moore=True,  # Check all 8 directions
-            include_center=False
-        )
-        
-        for neighbour in neighbors:
+        # Calculate burning chance based on neighboring burning cells and wind direction
+        burning_chance = 0
+        burning_index = 0.1
+        # Neighbors for moore neighborhood
+        neighbours = self.model.grid.get_neighbors(self.pos, moore=True, include_center=False)
+        # Calculate influence of each burning neighbor
+        for neighbour in neighbours:
             if isinstance(neighbour, ForestCell) and neighbour.state == CellState.Burning:
-                burning_chance += 0.1
-                
+                # Determine relative position to apply wind effect
+                rel_x = neighbour.pos[0] - self.pos[0]
+                rel_y = neighbour.pos[1] - self.pos[1]
+                neighbour_relative_pos = [rel_x, rel_y]
+                wind_pos = self.add_two_pos(neighbour_relative_pos, self.model.wind)
+                wind_abs_pos = sum(abs(x) for x in wind_pos)
+                # Adjust burning chance based on wind influence
+                if wind_abs_pos < 0.1:
+                    burning_chance += burning_index * 2
+                elif wind_abs_pos == 1:
+                    burning_chance += burning_index * 1.5
+                elif wind_abs_pos == 2 and (self.add_two_pos(list(neighbour.pos), self.model.wind) in neighbours):
+                    burning_chance += burning_index
+                else:
+                    burning_chance += burning_index * 0.5
         return burning_chance
 
     def step(self):

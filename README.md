@@ -40,16 +40,26 @@ pip install -r requirements.txt
 
 ### Running the Simulation
 
-Run the simulation using the provided script:
+#### Interactive Pygame Visualization (Recommended)
+
+Run the interactive visualization with a configuration menu:
 ```bash
-python scripts/run_simulation.py
+python scripts/pygame_viz.py
 ```
 
-The simulation will display the fire spread in the terminal using emojis:
-- 🌲 Fuel (unburned vegetation)
-- 🔥 Burning cells
-- ⬛ Burned out areas
-- 🌊 Empty/water cells
+This will launch a graphical interface where you can:
+- Configure grid size, cell size, and wind direction
+- Set initial fire position
+- Control simulation speed with a slider
+- Pause/resume with SPACE
+- Reset with R
+- View real-time fire spread with color-coded cells
+
+**Legend:**
+- 🟢 Green: Fuel (unburned vegetation)
+- 🔴 Red: Burning cells
+- ⬛ Gray: Burned out areas
+- 🔵 Blue: Empty/water cells
 
 ### Running Tests
 
