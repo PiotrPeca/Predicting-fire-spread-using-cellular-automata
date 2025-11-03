@@ -39,7 +39,7 @@ class ForestCell(Agent):
     
     def __init__(
         self, 
-        pos: Tuple[int, int], 
+        pos: tuple[int, int], 
         model, 
         fuel: FuelType, 
         state: CellState
@@ -63,9 +63,9 @@ class ForestCell(Agent):
 
     def add_two_pos(
         self, 
-        pos1: list[int, int], 
-        pos2: list[int, int]
-    ) -> list[int, int]:
+        pos1: list[int], 
+        pos2: list[int]
+    ) -> list[int]:
         """
         Add two position vectors.
 

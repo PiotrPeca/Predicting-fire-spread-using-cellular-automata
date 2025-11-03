@@ -22,19 +22,26 @@ cd Predicting-fire-spread-using-cellular-automata
 
 2. Create and activate a virtual environment:
 ```bash
+# On macOS/Linux:
+
 # Create virtual environment
 python3 -m venv .venv
 
-# Activate it (macOS/Linux)
+# Activate it 
 source .venv/bin/activate
 
-# On Windows, use:
-# .venv\Scripts\activate
+# On Windows:
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate it 
+.venv\Scripts\activate
 ```
 
 3. Install dependencies:
 ```bash
-pip install --upgrade pip
+python.exe -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 

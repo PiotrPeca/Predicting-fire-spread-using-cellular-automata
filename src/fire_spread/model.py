@@ -9,7 +9,7 @@ from .cell import ForestCell, FuelType, CellState
 class FireModel(Model):
     """Main model for fire spread simulation using cellular automata."""
 
-    def __init__(self, width: int, height: int, wind: list[int, int], initial_fire_pos: tuple[int, int] | None = None):
+    def __init__(self, width: int, height: int, wind: list[int], initial_fire_pos: tuple[int, int] | None = None):
         """
         Initialize the fire spread model.
         
