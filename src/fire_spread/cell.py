@@ -86,13 +86,10 @@ class ForestCell(Agent):
         Returns:
             True if the cell contains fuel and is not already burning/burned
         """
+        # In future it needs to be changed (water has negative pdense=pveg)
         if self.fuel.name == "water" or self.state != CellState.Fuel:
             return False
         return True
-
-    def burning_chance(self) -> float:
-        """Return precomputed ignition probability for this cell."""
-        return self.model.ignite_prob.get(self.pos, 0.0)
 
     def step(self):
         """
@@ -112,7 +109,8 @@ class ForestCell(Agent):
         
         # Handle fuel cells that might catch fire
         if self.is_burnable():
-            ignition_prob = self.burning_chance()
+            # It probably should be changed
+            ignition_prob = self.model.ignite_prob.get(self.pos, 0.0)
             if ignition_prob > 0 and self.model.random.random() < ignition_prob:
                 self.next_state = CellState.Burning
                 self.burn_timer = int(self.fuel.burn_time)

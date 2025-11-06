@@ -67,6 +67,7 @@ class FireModel(Model):
     
     def _prepare_ignite_probabilities(self) -> None:
         """Compute ignition probabilities for the current step."""
+        # Resetting ignite_prob for next step
         for key in self.ignite_prob:
             self.ignite_prob[key] = 0.0
 
@@ -78,4 +79,5 @@ class FireModel(Model):
                     if isinstance(neighbour, ForestCell) and neighbour.is_burnable():
                         pos = neighbour.pos
                         if pos in self.ignite_prob:
+                            # NEEDS TO BE CHANGED!
                             self.ignite_prob[pos] = max(self.ignite_prob[pos], base_prob)
