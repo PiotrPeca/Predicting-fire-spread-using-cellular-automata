@@ -91,36 +91,8 @@ class ForestCell(Agent):
         return True
 
     def burning_chance(self) -> float:
-        """
-        Calculate the probability of this cell catching fire.
-        
-        Returns:
-            Probability value between 0 and 1 based on burning neighbors
-        """
-        # Calculate burning chance based on neighboring burning cells and wind direction
-        burning_chance = 0
-        burning_index = 0.1
-        # Neighbors for moore neighborhood
-        neighbours = self.model.grid.get_neighbors(self.pos, moore=True, include_center=False)
-        # Calculate influence of each burning neighbor
-        for neighbour in neighbours:
-            if isinstance(neighbour, ForestCell) and neighbour.state == CellState.Burning:
-                # Determine relative position to apply wind effect
-                rel_x = neighbour.pos[0] - self.pos[0]
-                rel_y = neighbour.pos[1] - self.pos[1]
-                neighbour_relative_pos = [rel_x, rel_y]
-                wind_pos = self.add_two_pos(neighbour_relative_pos, self.model.wind)
-                wind_abs_pos = sum(abs(x) for x in wind_pos)
-                # Adjust burning chance based on wind influence
-                if wind_abs_pos < 0.1:
-                    burning_chance += burning_index * 2
-                elif wind_abs_pos == 1:
-                    burning_chance += burning_index * 1.5
-                elif wind_abs_pos == 2 and (self.add_two_pos(list(neighbour.pos), self.model.wind) in neighbours):
-                    burning_chance += burning_index
-                else:
-                    burning_chance += burning_index * 0.5
-        return burning_chance
+        """Return precomputed ignition probability for this cell."""
+        return self.model.ignite_prob.get(self.pos, 0.0)
 
     def step(self):
         """
@@ -140,9 +112,10 @@ class ForestCell(Agent):
         
         # Handle fuel cells that might catch fire
         if self.is_burnable():
-            p = self.burning_chance()
-            if self.model.random.random() < p:
+            ignition_prob = self.burning_chance()
+            if ignition_prob > 0 and self.model.random.random() < ignition_prob:
                 self.next_state = CellState.Burning
+                self.burn_timer = int(self.fuel.burn_time)
 
     def advance(self):
         """
