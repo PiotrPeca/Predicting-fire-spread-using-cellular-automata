@@ -242,14 +242,22 @@ class FireModel(Model):
         for key in self.ignite_prob:
             self.ignite_prob[key] = 0.0
 
-        base_prob = 0.1
+        base_prob = 0.1 #p0
         for agent in self.agents:
             if isinstance(agent, ForestCell) and agent.state == CellState.Burning:
                 neighbours = self.grid.get_neighbors(agent.pos, moore=True, include_center=False)
                 for neighbour in neighbours:
                     if isinstance(neighbour, ForestCell) and neighbour.is_burnable():
                         pos = neighbour.pos
+
+                        # Calculate p_burn using formula from article:
+                        # p_burn = p0 * (1 + p_veg) * (1 + p_dens)
+                        p_veg = neighbour.fuel.p_veg
+                        p_dens = neighbour.fuel.p_dens
+                        p_burn = base_prob * (1.0 + p_veg) * (1.0 + p_dens)
+                        p_burn = max(0.0, min(1.0, p_burn))
+
+                        # Combine with previous probability using independent sources formula
                         prev_prob = self.ignite_prob.get(pos, 0.0)
-                        # TODO: Incorporate p_veg and p_dens into probability calculation
-                        next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - base_prob)
+                        next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - p_burn)
                         self.ignite_prob[pos] = max(0.0, min(1.0, next_prob))
