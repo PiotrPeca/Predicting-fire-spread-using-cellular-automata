@@ -86,3 +86,5 @@ class FireModel(Model):
                         prev_prob = self.ignite_prob.get(pos, 0.0)
                         next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - base_prob)
                         self.ignite_prob[pos] = max(0.0, min(1.0, next_prob))
+
+# Test new branch
