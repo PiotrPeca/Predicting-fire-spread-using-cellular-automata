@@ -19,8 +19,9 @@ project_root = Path(__file__).parent.parent
 src_path = project_root / "src"
 sys.path.insert(0, str(src_path))
 
-from fire_spread.model import FireModel
-from fire_spread.cell import CellState
+from fire_spread import FireModel
+from fire_spread import CellState
+
 from visualization import (
     GridRenderer,
     InfoPanel,

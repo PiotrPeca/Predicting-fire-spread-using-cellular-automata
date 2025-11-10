@@ -56,7 +56,12 @@ class FireModel(Model):
         Uses a two-phase update: first all agents calculate their next state,
         then all agents update to their next state. This ensures synchronous updates.
         """
+        print("Ignite probabilities at this step:")
+        for pos, prob in sorted(self.ignite_prob.items()):
+            if prob > 0:
+                print(f"  {pos}: {prob:.3f}")
         self._prepare_ignite_probabilities()
+
         # Phase 1: Calculate next states
         for agent in self.agents.shuffle():
             agent.step()
@@ -78,6 +83,6 @@ class FireModel(Model):
                 for neighbour in neighbours:
                     if isinstance(neighbour, ForestCell) and neighbour.is_burnable():
                         pos = neighbour.pos
-                        if pos in self.ignite_prob:
-                            # NEEDS TO BE CHANGED!
-                            self.ignite_prob[pos] = max(self.ignite_prob[pos], base_prob)
+                        prev_prob = self.ignite_prob.get(pos, 0.0)
+                        next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - base_prob)
+                        self.ignite_prob[pos] = max(0.0, min(1.0, next_prob))
