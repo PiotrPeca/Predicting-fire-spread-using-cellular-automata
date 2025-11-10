@@ -60,24 +60,6 @@ class ForestCell(Agent):
         self.state = state
         self.burn_timer = int(fuel.burn_time) if state == CellState.Burning else 0
         self.next_state = state
-
-    def add_two_pos(
-        self, 
-        pos1: list[int], 
-        pos2: list[int]
-    ) -> list[int]:
-        """
-        Add two position vectors.
-
-        Args:
-            pos1: First position vector [x1, y1]
-            pos2: Second position vector [x2, y2]
-        
-        Returns:
-            Resulting position vector [x1 + x2, y1 + y2]
-        """
-        pos_result = [x + y for x, y in zip(pos1, pos2)]
-        return pos_result
     
     def is_burnable(self) -> bool:
         """
@@ -109,7 +91,6 @@ class ForestCell(Agent):
         
         # Handle fuel cells that might catch fire
         if self.is_burnable():
-            # It probably should be changed
             ignition_prob = self.model.ignite_prob.get(self.pos, 0.0)
             if ignition_prob > 0 and self.model.random.random() < ignition_prob:
                 self.next_state = CellState.Burning
