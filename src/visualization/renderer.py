@@ -8,8 +8,29 @@ from typing import TYPE_CHECKING
 
 import pygame
 
-from fire_spread.cell import CellState
-from .colors import GREEN, RED, GRAY, BLUE, BLACK
+from fire_spread.cell import CellState, VegetationType, VegetationDensity
+from .colors import (
+    BLACK,
+    BURNING_COLOR,
+    BURNED_COLOR,
+    # Cultivated
+    CULTIVATED_SPARSE_COLOR,
+    CULTIVATED_NORMAL_COLOR,
+    CULTIVATED_DENSE_COLOR,
+    # Forest
+    FOREST_SPARSE_COLOR,
+    FOREST_NORMAL_COLOR,
+    FOREST_DENSE_COLOR,
+    # Shrub
+    SHRUB_SPARSE_COLOR,
+    SHRUB_NORMAL_COLOR,
+    SHRUB_DENSE_COLOR,
+    # Barriers
+    WATER_COLOR,
+    ROAD_PRIMARY_COLOR,
+    ROAD_SECONDARY_COLOR,
+    ROAD_TERTIARY_COLOR,
+)
 
 if TYPE_CHECKING:
     from fire_spread.model import FireModel
@@ -24,6 +45,30 @@ class GridRenderer:
     Attributes:
         cell_size: Size of each cell in pixels.
     """
+
+    # Mapping of (VegetationType, VegetationDensity) to colors
+    FUEL_COLORS = {
+        # Cultivated
+        (VegetationType.CULTIVATED, VegetationDensity.SPARSE): CULTIVATED_SPARSE_COLOR,
+        (VegetationType.CULTIVATED, VegetationDensity.NORMAL): CULTIVATED_NORMAL_COLOR,
+        (VegetationType.CULTIVATED, VegetationDensity.DENSE): CULTIVATED_DENSE_COLOR,
+        
+        # Forest
+        (VegetationType.FORESTS, VegetationDensity.SPARSE): FOREST_SPARSE_COLOR,
+        (VegetationType.FORESTS, VegetationDensity.NORMAL): FOREST_NORMAL_COLOR,
+        (VegetationType.FORESTS, VegetationDensity.DENSE): FOREST_DENSE_COLOR,
+        
+        # Shrub
+        (VegetationType.SHRUB, VegetationDensity.SPARSE): SHRUB_SPARSE_COLOR,
+        (VegetationType.SHRUB, VegetationDensity.NORMAL): SHRUB_NORMAL_COLOR,
+        (VegetationType.SHRUB, VegetationDensity.DENSE): SHRUB_DENSE_COLOR,
+        
+        # Barriers (density doesn't matter, using WATER as default)
+        (VegetationType.WATER, VegetationDensity.WATER): WATER_COLOR,
+        (VegetationType.ROAD_PRIMARY, VegetationDensity.ROAD_PRIMARY): ROAD_PRIMARY_COLOR,
+        (VegetationType.ROAD_SECONDARY, VegetationDensity.ROAD_SECONDARY): ROAD_SECONDARY_COLOR,
+        (VegetationType.ROAD_TERTIARY, VegetationDensity.ROAD_TERTIARY): ROAD_TERTIARY_COLOR,
+    }
     
     def __init__(self, cell_size: int) -> None:
         """Initialize the grid renderer.
@@ -33,23 +78,31 @@ class GridRenderer:
         """
         self.cell_size = cell_size
     
-    def get_cell_color(self, state: CellState) -> tuple[int, int, int]:
-        """Get the RGB color for a given cell state.
+    def get_cell_color(self, agent) -> tuple[int, int, int]:
+        """Get the RGB color for a given cell based on state and fuel type.
         
         Args:
-            state: The current state of the cell.
+            agent: The ForestCell agent to get color for.
             
         Returns:
-            RGB color tuple for the given state.
+            RGB color tuple for the given cell.
         """
-        if state == CellState.Fuel:
-            return GREEN
-        elif state == CellState.Burning:
-            return RED
-        elif state == CellState.Burned:
-            return GRAY
+        # Priority 1: Burning state
+        if agent.state == CellState.Burning:
+            return BURNING_COLOR
+        
+        # Priority 2: Burned state
+        elif agent.state == CellState.Burned:
+            return BURNED_COLOR
+        
+        # Priority 3: Fuel state - color based on vegetation type and density
+        elif agent.state == CellState.Fuel:
+            fuel_key = (agent.fuel.veg_type, agent.fuel.veg_density)
+            return self.FUEL_COLORS.get(fuel_key, FOREST_NORMAL_COLOR)  # Default fallback
+        
+        # Priority 4: Empty or unknown state
         else:
-            return BLUE
+            return BLACK
     
     def draw(self, screen: pygame.Surface, model: "FireModel") -> None:
         """Draw the grid of cells onto the screen.
@@ -63,7 +116,7 @@ class GridRenderer:
         """
         for agent in model.agents:
             x, y = agent.pos
-            color = self.get_cell_color(agent.state)
+            color = self.get_cell_color(agent)
             
             # Draw filled cell
             pygame.draw.rect(

@@ -10,7 +10,7 @@ import sys
 
 import pygame
 
-from .colors import WHITE, BLACK, RED, BLUE, GRAY, GREEN
+from .colors import WHITE, BLACK, BURNING_COLOR, FOREST_NORMAL_COLOR
 from .colors import DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_CELL_SIZE
 
 
@@ -90,7 +90,7 @@ class SetupMenu:
         
         y_offset = 100
         for i, line in enumerate(instructions):
-            text = self.small_font.render(line, True, GRAY)
+            text = self.small_font.render(line, True, BLACK)
             self.screen.blit(text, (50, y_offset + i * 25))
     
     def _draw_fields(self) -> list[tuple[str, str, any]]:
@@ -120,14 +120,14 @@ class SetupMenu:
             
             # Draw value (red if active, blue otherwise)
             display_value = self.input_text if self.active_field == key else str(value)
-            value_color = RED if self.active_field == key else BLUE
+            value_color = BURNING_COLOR if self.active_field == key else FOREST_NORMAL_COLOR
             value_text = self.font.render(display_value, True, value_color)
             value_rect = value_text.get_rect(topleft=(450, y_offset + i * 40))
             self.screen.blit(value_text, value_rect.topleft)
             
             # Draw cursor if field is active
             if self.active_field == key:
-                cursor = self.font.render("_", True, RED)
+                cursor = self.font.render("_", True, BURNING_COLOR)
                 self.screen.blit(cursor, (value_rect.right + 5, y_offset + i * 40))
         
         return fields
@@ -151,7 +151,7 @@ class SetupMenu:
         fields = self._draw_fields()
         
         # Start button
-        start_text = self.title_font.render("ENTER - START", True, GREEN)
+        start_text = self.title_font.render("ENTER - START", True, FOREST_NORMAL_COLOR)
         self.screen.blit(start_text, (250, 520))
         
         pygame.display.flip()

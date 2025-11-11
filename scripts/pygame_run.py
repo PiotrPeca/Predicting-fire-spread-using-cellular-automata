@@ -257,11 +257,11 @@ def main() -> None:
     height = params['height']
     cell_size = params['cell_size']
     wind = [params['wind_x'], params['wind_y']]
-    fire_pos = (
-        (params['fire_x'], params['fire_y'])
-        if params['fire_x'] is not None
-        else None
-    )
+
+    # Handle fire position (None means auto-center in model)
+    fire_pos = None
+    if params['fire_x'] is not None and params['fire_y'] is not None:
+        fire_pos = (params['fire_x'], params['fire_y'])
     
     # Run simulation
     runner = SimulationRunner(width, height, cell_size, wind, fire_pos)
