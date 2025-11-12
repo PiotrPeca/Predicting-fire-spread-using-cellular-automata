@@ -14,10 +14,65 @@ class CellState(Enum):
     Burned = 3
 
 
+class VegetationType(Enum):
+    """Types of vegetation."""
+    NO_VEGETATION = "no_vegetation"
+    CULTIVATED = "cultivated"
+    FORESTS = "forests"
+    SHRUB = "shrub"
+    WATER = "water"
+    ROAD_PRIMARY = "road_primary"
+    ROAD_SECONDARY = "road_secondary"
+    ROAD_TERTIARY = "road_tertiary"
+
+
+class VegetationDensity(Enum):
+    """Density of vegetation."""
+    NO_VEGETATION = "no_vegetation"
+    SPARSE = "sparse"
+    NORMAL = "normal"
+    DENSE = "dense"
+    WATER = "water"
+    ROAD_PRIMARY = "road_primary"
+    ROAD_SECONDARY = "road_secondary"
+    ROAD_TERTIARY = "road_tertiary"
+
+
 class FuelType:
     """Represents a type of fuel with specific burning properties."""
     
-    def __init__(self, name: str, burn_time: int, color: str):
+    # Vegetation type probability factors (p_veg)
+    P_VEG_VALUES = {
+        VegetationType.NO_VEGETATION: -1.0,
+        VegetationType.CULTIVATED: -0.4,
+        VegetationType.FORESTS: 0.4,
+        VegetationType.SHRUB: 0.4,
+        VegetationType.WATER: -0.4,
+        VegetationType.ROAD_PRIMARY: -0.8,
+        VegetationType.ROAD_SECONDARY: -0.7,
+        VegetationType.ROAD_TERTIARY: -0.4,
+    }
+    
+    # Vegetation density probability factors (p_dens)
+    P_DENS_VALUES = {
+        VegetationDensity.NO_VEGETATION: -1.0,
+        VegetationDensity.SPARSE: -0.3,
+        VegetationDensity.NORMAL: 0.0,
+        VegetationDensity.DENSE: 0.3,
+        VegetationDensity.WATER: -0.4,
+        VegetationDensity.ROAD_PRIMARY: -0.8,
+        VegetationDensity.ROAD_SECONDARY: -0.7,
+        VegetationDensity.ROAD_TERTIARY: -0.4,
+    }
+
+    def __init__(
+        self, 
+        name: str, 
+        burn_time: int, 
+        color: str, 
+        veg_type: VegetationType, 
+        veg_density: VegetationDensity
+    ):
         """
         Initialize a fuel type.
         
@@ -25,13 +80,21 @@ class FuelType:
             name: Name of the fuel type (e.g., "grass", "tree", "water")
             burn_time: Duration the fuel burns for (in simulation steps)
             color: Color representation for visualization
+            veg_type: Type of vegetation
+            veg_density: Density of vegetation
         """
         self.name = name
         self.burn_time = burn_time
         self.color = color
+        self.veg_type = veg_type
+        self.veg_density = veg_density
+        self.p_veg = self.P_VEG_VALUES[veg_type]
+        self.p_dens = self.P_DENS_VALUES[veg_density]
 
     def __str__(self) -> str:
-        return f"Fuel type: {self.name}, burn time: {self.burn_time}"
+        return (f"Fuel type: {self.name}, burn time: {self.burn_time}, "
+                f"veg_type: {self.veg_type.value}, veg_density: {self.veg_density.value}, "
+                f"p_veg: {self.p_veg}, p_dens: {self.p_dens}")
 
 
 class ForestCell(Agent):
@@ -68,8 +131,16 @@ class ForestCell(Agent):
         Returns:
             True if the cell contains fuel and is not already burning/burned
         """
-        # In future it needs to be changed (water has negative pdense=pveg)
-        if self.fuel.name == "water" or self.state != CellState.Fuel:
+        # Non-burnable types: water, roads, no vegetation, or already burning/burned
+        non_burnable_types = {
+            VegetationType.WATER,
+            VegetationType.ROAD_PRIMARY,
+            VegetationType.ROAD_SECONDARY,
+            VegetationType.ROAD_TERTIARY,
+            VegetationType.NO_VEGETATION
+        }
+
+        if self.fuel.veg_type in non_burnable_types or self.state != CellState.Fuel:
             return False
         return True
 

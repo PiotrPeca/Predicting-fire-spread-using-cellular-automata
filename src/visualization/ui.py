@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 
 import pygame
 
-from .colors import WHITE, BLACK, GRAY, RED
+from .colors import WHITE, BLACK, BURNING_COLOR
 
 if TYPE_CHECKING:
     from fire_spread.model import FireModel
@@ -131,7 +131,7 @@ class SpeedSlider:
             current_val: Current FPS value to display.
         """
         # Draw slider bar background
-        pygame.draw.rect(screen, GRAY, (self.x, self.y, self.width, self.height))
+        pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height))
         
         # Calculate handle position
         ratio = (current_val - self.min_val) / (self.max_val - self.min_val)
@@ -140,7 +140,7 @@ class SpeedSlider:
         # Draw circular handle
         pygame.draw.circle(
             screen,
-            RED,
+            BURNING_COLOR,
             (handle_x, self.y + self.height // 2),
             10  # Handle radius
         )

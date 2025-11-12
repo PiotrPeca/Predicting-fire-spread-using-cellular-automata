@@ -19,9 +19,7 @@ project_root = Path(__file__).parent.parent
 src_path = project_root / "src"
 sys.path.insert(0, str(src_path))
 
-from fire_spread import FireModel
-from fire_spread import CellState
-from fire_spread import WindProvider
+from fire_spread import FireModel, CellState, WindProvider
 
 from visualization import (
     GridRenderer,
@@ -256,11 +254,12 @@ def main() -> None:
     width = params['width']
     height = params['height']
     cell_size = params['cell_size']
-    fire_pos = (
-        (params['fire_x'], params['fire_y'])
-        if params['fire_x'] is not None
-        else None
-    )
+    wind = [params['wind_x'], params['wind_y']]
+
+    # Handle fire position (None means auto-center in model)
+    fire_pos = None
+    if params['fire_x'] is not None and params['fire_y'] is not None:
+        fire_pos = (params['fire_x'], params['fire_y'])
     
     # Run simulation
     runner = SimulationRunner(width, height, cell_size,fire_pos)

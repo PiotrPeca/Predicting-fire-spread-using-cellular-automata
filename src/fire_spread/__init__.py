@@ -5,7 +5,7 @@ A model of Discrete Event Simulation which visualizes and predicts
 how fire spread using Stochastic Cellular Automata.
 """
 
-from .cell import ForestCell, CellState, FuelType
+from .cell import ForestCell, CellState, FuelType, VegetationType, VegetationDensity
 from .model import FireModel
 from .wind_provider import WindProvider
 
@@ -15,5 +15,7 @@ __all__ = [
     "ForestCell",
     "CellState",
     "FuelType",
+    "VegetationType",
+    "VegetationDensity",
     "FireModel",
 ]
