@@ -21,6 +21,7 @@ sys.path.insert(0, str(src_path))
 
 from fire_spread import FireModel
 from fire_spread import CellState
+from fire_spread import WindProvider
 
 from visualization import (
     GridRenderer,
@@ -58,7 +59,6 @@ class SimulationRunner:
         width: int,
         height: int,
         cell_size: int,
-        wind: list[int],
         fire_pos: Optional[tuple[int, int]]
     ) -> None:
         """Initialize the simulation runner.
@@ -82,14 +82,14 @@ class SimulationRunner:
         # Store initial parameters for reset
         self.width = width
         self.height = height
-        self.wind = wind
+        self.wind_provider = WindProvider()
         self.initial_fire_pos = fire_pos
         
         # Create model
         self.model = FireModel(
             width=width,
             height=height,
-            wind=wind,
+            wind_provider=self.wind_provider,
             initial_fire_pos=fire_pos
         )
         
@@ -136,7 +136,7 @@ class SimulationRunner:
             self.model = FireModel(
                 width=self.width,
                 height=self.height,
-                wind=self.wind,
+                wind_provider=self.wind_provider,
                 initial_fire_pos=self.initial_fire_pos
             )
             self.paused = False
@@ -256,7 +256,6 @@ def main() -> None:
     width = params['width']
     height = params['height']
     cell_size = params['cell_size']
-    wind = [params['wind_x'], params['wind_y']]
     fire_pos = (
         (params['fire_x'], params['fire_y'])
         if params['fire_x'] is not None
@@ -264,7 +263,7 @@ def main() -> None:
     )
     
     # Run simulation
-    runner = SimulationRunner(width, height, cell_size, wind, fire_pos)
+    runner = SimulationRunner(width, height, cell_size,fire_pos)
     runner.run()
 
 

@@ -7,6 +7,7 @@ how fire spread using Stochastic Cellular Automata.
 
 from .cell import ForestCell, CellState, FuelType
 from .model import FireModel
+from .wind_provider import WindProvider
 
 __version__ = "0.1.0"
 
