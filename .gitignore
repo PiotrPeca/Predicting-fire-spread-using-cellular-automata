@@ -6,6 +6,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Secrets
+src/fire_spread/constants.py
+
 # C extensions
 *.so
 

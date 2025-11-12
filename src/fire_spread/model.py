@@ -270,8 +270,8 @@ class FireModel(Model):
         if not next_wind:
             self.wind = {'x': 0, 'y': 0, 'speed': 0, 'direction': 0}
             return
-        direction_degrees = next_wind.get('wind_degree', 0)
-        speed = next_wind.get('wind_kph', 0)
+        direction_degrees = next_wind.get('windDir', 0)
+        speed = next_wind.get('windSpeedKPH', 0)
 
         # Conversion from geography to Math grades
         math_degrees = (450 - direction_degrees) % 360

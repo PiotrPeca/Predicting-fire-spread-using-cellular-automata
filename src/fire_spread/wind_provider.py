@@ -1,5 +1,12 @@
 from pathlib import Path
+from typing import Dict, List, Optional, Any, Set, Tuple
+from datetime import datetime, timedelta
 import json
+import logging
+
+from .weather import WeatherAPIWrapper
+
+logger = logging.getLogger(__name__)
 
 compass_degree = {
     "N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5,
@@ -9,34 +16,75 @@ compass_degree = {
 }
 
 class WindProvider:
-    def __init__(self,data_folder: str = "data", filename: str = "wind_data.json"):
-        base_dir = Path(__file__).resolve().parents[2]
-        self.file_path = base_dir / data_folder / filename
+    wind_fields = [ "timestamp", "windDir", "windSpeedKPH", "windGustKPH"]
 
-        if not self.file_path.exists():
-            raise FileNotFoundError(f"Could not find wind data file: {self.file_path}")
-
-        with self.file_path.open("r", encoding="utf-8") as f:
-            raw_data = json.load(f)
-
-        self.rows = raw_data.get("hours", []) if isinstance(raw_data, dict) else raw_data
+    def __init__(
+        self,
+        lat: float,
+        lon: float,
+        steps_per_h: int = 1,
+    ):
+        self.lat = lat
+        self.lon = lon
+        self.weatherApiWrapper = WeatherAPIWrapper(lat, lon)
+        self.stemps_per_h = steps_per_h
+        self.steps_index = 0
         self.index = 0
-    def get_next_wind(self) -> dict:
-        if self.index >= len(self.rows):
-            return {"wind_degree": int(round(0)), "wind_kph": 0}
-        r = self.rows[self.index]
-        self.index += 1
-        dir_str = str(r.get("windDir", "")).upper().strip()
-        wind_kph = float(r.get("windSpeedKPH", 0.0))
-        wind_degree = compass_degree.get(dir_str, 0)
-        return {"wind_degree": int(wind_degree), "wind_kph": wind_kph}
+        self.data = []
+
+    def fetch_data(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+    ):
+        result = self.weatherApiWrapper.get_data(
+            from_date, 
+            to_date,
+            self.wind_fields,
+        )
+        self.data = result if result is not None else []
+        if not self.data:
+            logger.warning(f"No wind data fetched for {from_date} to {to_date}")
+        else:
+            logger.info(f"Fetched {len(self.data)} wind records")
+
+
+    def get_next_wind(self) -> Optional[dict[str, Any]]:
+        if not self.data or self.index >= len(self.data):
+            return None
+        if self.steps_index % self.stemps_per_h == 0:
+            self.index += 1
+        self.steps_index += 1
+        r = self.data[self.index]
+        wind_dir_str = str(r.get("windDir", "")).upper().strip()
+        wind_dir_degrees = int(compass_degree.get(wind_dir_str, 0))
+        return {
+            "timestamp": r.get("timestamp"),
+            "windDir": wind_dir_degrees,
+            "windSpeedKPH": r.get("windSpeedKPH"),
+            "windGustKPH": r.get("windGustKPH")
+        }
 
 if __name__ == "__main__":
-    wp = WindProvider()
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    wp = WindProvider(61.62453, 14.69939, 3)
+    from_date = datetime.fromisoformat("2018-07-05T14:00:00")
+    to_date = from_date + timedelta(days=5)
+    
+    logger.info(f"Fetching data from {from_date} to {to_date}")
+    wp.fetch_data(from_date, to_date)
+    
+    logger.info(f"Retrieved {len(wp.data)} records")
+    
     i = 0
-    while i < 100:
+    while i < 24 * 3:
         i = i + 1
         w = wp.get_next_wind()
         if w is None:
-            break
-        print(w)
+            continue
+        date_str = datetime.fromtimestamp(w.get("timestamp")).isoformat()
+        print(date_str, w)

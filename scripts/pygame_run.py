@@ -13,6 +13,7 @@ import pygame
 import sys
 from pathlib import Path
 from typing import Optional
+from datetime import datetime, timedelta
 
 # Add the src directory to the Python path
 project_root = Path(__file__).parent.parent
@@ -80,7 +81,12 @@ class SimulationRunner:
         # Store initial parameters for reset
         self.width = width
         self.height = height
-        self.wind_provider = WindProvider()
+        self.wind_provider = WindProvider(61.62453, 14.69939)
+
+        from_date = datetime.fromisoformat("2018-07-05T14:00:00")
+        to_date = from_date + timedelta(days=10)
+        self.wind_provider.fetch_data(from_date=from_date, to_date=to_date)
+
         self.initial_fire_pos = fire_pos
         
         # Create model
