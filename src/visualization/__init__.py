@@ -2,7 +2,7 @@
 
 from .colors import *
 from .renderer import GridRenderer
-from .ui import InfoPanel, SpeedSlider
+from .ui import InfoPanel, SpeedSlider, WindRose
 from .menu import SetupMenu
 
 __all__ = [
@@ -11,6 +11,7 @@ __all__ = [
     'InfoPanel',
     'SpeedSlider',
     'SetupMenu',
+    'WindRose',
     
     # Fuel type colors - Cultivated
     'CULTIVATED_SPARSE_COLOR',

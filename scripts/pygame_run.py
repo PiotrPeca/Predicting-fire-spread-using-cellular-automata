@@ -26,6 +26,7 @@ from visualization import (
     GridRenderer,
     InfoPanel,
     SpeedSlider,
+    WindRose,
     SetupMenu,
     WHITE,
     DEFAULT_FPS,
@@ -71,7 +72,7 @@ class SimulationRunner:
         """
         # Window setup
         window_width = width * cell_size
-        window_height = height * cell_size + 100  # Extra space for UI
+        window_height = height * cell_size + 300  # Extra space for UI
         
         pygame.init()
         self.screen = pygame.display.set_mode((window_width, window_height))
@@ -107,6 +108,11 @@ class SimulationRunner:
             height=20,
             min_val=MIN_FPS,
             max_val=MAX_FPS
+        )
+        self.wind_rose = WindRose(
+            center_x=window_width - 120,
+            center_y=height * cell_size + 120,
+            radius=70
         )
         
         # Simulation state
@@ -205,6 +211,15 @@ class SimulationRunner:
             self.window_width
         )
         self.slider.draw(self.screen, self.current_fps)
+
+        # Draw wind rose
+        wind_direction = 0
+        wind_speed = 0
+        if hasattr(self.model, 'wind') and isinstance(self.model.wind, dict):
+            wind_direction = self.model.wind.get('direction', 0)
+            wind_speed = self.model.wind.get('speed', 0)
+
+        self.wind_rose.draw(self.screen, wind_direction, wind_speed)
         
         pygame.display.flip()
     
@@ -260,7 +275,6 @@ def main() -> None:
     width = params['width']
     height = params['height']
     cell_size = params['cell_size']
-    wind = [params['wind_x'], params['wind_y']]
 
     # Handle fire position (None means auto-center in model)
     fire_pos = None

@@ -21,16 +21,12 @@ class SimulationParams(TypedDict):
         width: Grid width in cells.
         height: Grid height in cells.
         cell_size: Size of each cell in pixels.
-        wind_x: Wind component in X direction.
-        wind_y: Wind component in Y direction.
         fire_x: Initial fire X position (None for auto-center).
         fire_y: Initial fire Y position (None for auto-center).
     """
     width: int
     height: int
     cell_size: int
-    wind_x: int
-    wind_y: int
     fire_x: Optional[int]
     fire_y: Optional[int]
 
@@ -68,8 +64,6 @@ class SetupMenu:
             'width': DEFAULT_WIDTH,
             'height': DEFAULT_HEIGHT,
             'cell_size': DEFAULT_CELL_SIZE,
-            'wind_x': 1,
-            'wind_y': 0,
             'fire_x': None,
             'fire_y': None,
         }
@@ -83,7 +77,6 @@ class SetupMenu:
         instructions = [
             "Kliknij na wartość aby ją zmienić",
             "None = automatyczny środek siatki",
-            "Wiatr: dodatni = wschód/północ, ujemny = zachód/południe",
             "",
             "Naciśnij ENTER aby rozpocząć symulację"
         ]
@@ -105,8 +98,6 @@ class SetupMenu:
             ('Szerokość siatki:', 'width', self.params['width']),
             ('Wysokość siatki:', 'height', self.params['height']),
             ('Rozmiar komórki (px):', 'cell_size', self.params['cell_size']),
-            ('Wiatr X (→/←):', 'wind_x', self.params['wind_x']),
-            ('Wiatr Y (↑/↓):', 'wind_y', self.params['wind_y']),
             ('Pożar X:', 'fire_x', 
              self.params['fire_x'] if self.params['fire_x'] is not None else 'None'),
             ('Pożar Y:', 'fire_y',
