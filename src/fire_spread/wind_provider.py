@@ -47,17 +47,22 @@ class WindProvider:
             logger.warning(f"No wind data fetched for {from_date} to {to_date}")
         else:
             logger.info(f"Fetched {len(self.data)} wind records")
+            self.steps_index = 0
+            self.index = 0
 
 
     def get_next_wind(self) -> Optional[dict[str, Any]]:
         if not self.data or self.index >= len(self.data):
             return None
-        if self.steps_index % self.stemps_per_h == 0:
-            self.index += 1
-        self.steps_index += 1
+
         r = self.data[self.index]
         wind_dir_str = str(r.get("windDir", "")).upper().strip()
         wind_dir_degrees = int(compass_degree.get(wind_dir_str, 0))
+
+        if self.steps_index % self.stemps_per_h == 0:
+            self.index += 1
+        self.steps_index += 1
+
         return {
             "timestamp": r.get("timestamp"),
             "windDir": wind_dir_degrees,
