@@ -103,13 +103,13 @@ class GridRenderer:
         # Priority 4: Empty or unknown state
         else:
             return BLACK
-
+    
     def draw(self, screen: pygame.Surface, model: "FireModel") -> None:
         """Draw the grid of cells onto the screen.
-
+        
         Iterates through all agents in the model and draws each as a
         colored rectangle with a black border.
-
+        
         Args:
             screen: The Pygame surface to draw on.
             model: The fire spread model containing all cell agents.
@@ -119,13 +119,13 @@ class GridRenderer:
         for agent in model.agents:
             x, y = agent.pos
             color = self.get_cell_color(agent)
-
+            
             visual_y = grid_height - 1 - y
-
-            # Draw filled cell
+            
+            #Draw filled cell
             pygame.draw.rect(
                 screen,
                 color,
-                (x * self.cell_size, visual_y * self.cell_size,
+                (x * self.cell_size, visual_y * self.cell_size, 
                  self.cell_size, self.cell_size)
             )
