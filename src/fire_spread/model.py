@@ -157,6 +157,22 @@ class FireModel(Model):
                 density = self.random.choice(["sparse", "normal", "dense"])
                 fuel = self.fuel_types[f"cultivated_{density}"]
 
+            #dla calów sprawdzania czy wiatr dobrze działa tworzenie samego lasu
+            # if rand_val < 0.00:  # 5% water
+            #     fuel = self.fuel_types["water"]
+            # elif rand_val < 0.00:  # 3% roads
+            #     road_type = self.random.choice(["road_primary", "road_secondary", "road_tertiary"])
+            #     fuel = self.fuel_types[road_type]
+            # elif rand_val < 1.0:  # 40% forest (various densities)
+            #     density = "sparse"
+            #     fuel = self.fuel_types[f"forest_{density}"]
+            # elif rand_val < 0.0:  # 32% shrub (various densities)
+            #     density = self.random.choice(["sparse", "normal", "dense"])
+            #     fuel = self.fuel_types[f"shrub_{density}"]
+            # else:  # 20% cultivated (various densities)
+            #     density = self.random.choice(["sparse", "normal", "dense"])
+            #     fuel = self.fuel_types[f"cultivated_{density}"]
+
             state = CellState.Fuel
             cell = ForestCell((x, y), self, fuel, state)
             self.grid.place_agent(cell, (x, y))
@@ -232,7 +248,6 @@ class FireModel(Model):
         then all agents update to their next state. This ensures synchronous updates.
         """
         self.update_wind()
-        self.__str__()
         self._prepare_ignite_probabilities()
 
         # Phase 1: Calculate next states
@@ -242,6 +257,7 @@ class FireModel(Model):
         # Phase 2: Apply next states
         for agent in self.agents.shuffle():
             agent.advance()
+        self.__str__()
     
     def _prepare_ignite_probabilities(self) -> None:
         """Compute ignition probabilities for the current step."""
@@ -275,13 +291,14 @@ class FireModel(Model):
         if not next_wind:
             self.wind = {'x': 0, 'y': 0, 'speed': 0, 'direction': 0}
             return
-        direction_degrees = next_wind.get('windDir', 0)
+        direction_degrees_from = next_wind.get('windDir', 0)
         speed = next_wind.get('windSpeedKPH', 0)
         gust = next_wind.get('windGustKPH', 0)
 
         # Conversion from geography to Math grades
-        math_degrees = (450 - direction_degrees) % 360
-        math_radians = math.radians(math_degrees)
+        dir_to = (direction_degrees_from + 180.0) % 360.0
+        math_dir_to = 90.0 - dir_to
+        math_radians = math.radians(math_dir_to)
 
         wind_x = speed * math.cos(math_radians)
         wind_y = speed * math.sin(math_radians)
@@ -290,7 +307,7 @@ class FireModel(Model):
             'wind_x': wind_x,
             'wind_y': wind_y,
             'speed': speed,
-            'direction': direction_degrees,
+            'direction': direction_degrees_from,
             'gust': gust
         }
         return
@@ -334,9 +351,9 @@ class FireModel(Model):
             dx = 0
 
         if wind_y > 0:
-            dy = -1
-        elif wind_y < 0:
             dy = 1
+        elif wind_y < 0:
+            dy = -1
         else:
             dy = 0
         return (dx, dy)
