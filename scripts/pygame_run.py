@@ -197,8 +197,16 @@ class SimulationRunner:
         """Render all visual components to the screen."""
         self.screen.fill(WHITE)
         
-        # Draw grid
-        self.renderer.draw(self.screen, self.model)
+        # LAYER 0 — Background
+        self.renderer.draw_background(self.screen, self.window_width, self.grid_height * self.cell_size + 300)
+
+        # LAYER 1 — Base grid
+        self.renderer.draw_base(self.screen, self.model)
+
+        # LAYER 2 — Fire effects / sprites / smoke
+        self.renderer.draw_effects(self.screen, self.model)
+
+        # LAYER 3 — UI is drawn below normally
         
         # Draw UI elements
         self.info_panel.draw(
@@ -246,6 +254,11 @@ class SimulationRunner:
                 
                 else:
                     self._handle_slider_events(event)
+
+                # Obsługa kliknięcia w przycisk WRÓĆ
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.info_panel.back_button_rect.collidepoint(event.pos):
+                        return "BACK_TO_MENU"
             
             # Update simulation
             self._update_simulation()
@@ -267,24 +280,26 @@ def main() -> None:
     Shows the setup menu, then runs the simulation with the
     configured parameters.
     """
-    # Show configuration menu
-    menu = SetupMenu()
-    params = menu.run()
-    
-    # Extract parameters
-    width = params['width']
-    height = params['height']
-    cell_size = params['cell_size']
+    while True:
+        # Show configuration menu
+        menu = SetupMenu()
+        params = menu.run()
 
-    # Handle fire position (None means auto-center in model)
-    fire_pos = None
-    if params['fire_x'] is not None and params['fire_y'] is not None:
-        fire_pos = (params['fire_x'], params['fire_y'])
-    
-    # Run simulation
-    runner = SimulationRunner(width, height, cell_size,fire_pos)
-    runner.run()
+        # Extract parameters
+        width = params['width']
+        height = params['height']
+        cell_size = params['cell_size']
+        # Handle fire position (None means auto-center in model)
+        fire_pos = None
+        if params['fire_x'] is not None and params['fire_y'] is not None:
+            fire_pos = (params['fire_x'], params['fire_y'])
 
+        # Run simulation
+        runner = SimulationRunner(width, height, cell_size, fire_pos)
+        result = runner.run()
+
+        if result != "BACK_TO_MENU":
+            break
 
 if __name__ == "__main__":
     main()

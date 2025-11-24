@@ -30,6 +30,7 @@ class InfoPanel:
         """Initialize the info panel with fonts."""
         self.font = pygame.font.Font(None, 30)
         self.small_font = pygame.font.Font(None, 24)
+        self.back_button_rect = pygame.Rect(0, 0, 150, 40)
     
     def draw(
         self,
@@ -82,6 +83,17 @@ class InfoPanel:
         speed_label = self.small_font.render(f"Prędkość: {fps} FPS", True, BLACK)
         screen.blit(speed_label, (10, panel_y + 50))
 
+        # Button "WRÓĆ"
+        button_x = 200
+        button_y = panel_y + 180
+        self.back_button_rect.topleft = (button_x, button_y)
+
+        pygame.draw.rect(screen, (200, 200, 200), self.back_button_rect)
+        pygame.draw.rect(screen, (0, 0, 0), self.back_button_rect, 2)
+
+        font = pygame.font.SysFont(None, 32)
+        label = font.render("WRÓĆ", True, (0, 0, 0))
+        screen.blit(label, (button_x + 40, button_y + 5))
 
 class SpeedSlider:
     """Interactive slider for controlling simulation speed.

@@ -7,6 +7,9 @@ cellular automaton grid with proper colors for each cell state.
 from typing import TYPE_CHECKING
 
 import pygame
+import random
+import math
+import os
 
 from fire_spread.cell import CellState, VegetationType, VegetationDensity
 from .colors import (
@@ -77,7 +80,11 @@ class GridRenderer:
             cell_size: Size of each cell in pixels.
         """
         self.cell_size = cell_size
-    
+        image_path = os.path.join(
+            os.path.dirname(__file__), "images", "wildfire-background-blurred.jpg"
+        )
+        self.background_img = pygame.image.load(image_path).convert()    
+
     def get_cell_color(self, agent) -> tuple[int, int, int]:
         """Get the RGB color for a given cell based on state and fuel type.
         
@@ -89,7 +96,8 @@ class GridRenderer:
         """
         # Priority 1: Burning state
         if agent.state == CellState.Burning:
-            return BURNING_COLOR
+            pulse = 1.0 + 0.4 * math.sin(pygame.time.get_ticks() * 0.01 + agent.pos[0] * 0.3)
+            return self._apply_glow(BURNING_COLOR, pulse)
         
         # Priority 2: Burned state
         elif agent.state == CellState.Burned:
@@ -103,29 +111,44 @@ class GridRenderer:
         # Priority 4: Empty or unknown state
         else:
             return BLACK
-    
-    def draw(self, screen: pygame.Surface, model: "FireModel") -> None:
-        """Draw the grid of cells onto the screen.
         
-        Iterates through all agents in the model and draws each as a
-        colored rectangle with a black border.
-        
-        Args:
-            screen: The Pygame surface to draw on.
-            model: The fire spread model containing all cell agents.
-        """
+    def _apply_glow(self, color: tuple[int, int, int], strength: float) -> tuple[int, int, int]:
+        """Apply glow to a base color by increasing brightness."""
+        r, g, b = color
+
+        r = min(255, int(r * strength))
+        g = min(255, int(g * strength))
+        b = min(255, int(b * strength))
+
+        return (r, g, b)
+
+    def draw_background(self, screen: pygame.Surface, window_width: int, window_height: int):
+        """Layer 0 — background image for simulation."""
+        bg = pygame.transform.scale(self.background_img, (window_width, window_height))
+        screen.blit(bg, (0, 0))
+
+
+    def draw_base(self, screen: pygame.Surface, model: "FireModel"):
+        """Layer 1 — grid terrain."""
         grid_height = model.grid.height
 
         for agent in model.agents:
             x, y = agent.pos
+            visual_y = grid_height - 1 - y  # bottom-left → top-left conversion
             color = self.get_cell_color(agent)
-            
-            visual_y = grid_height - 1 - y
-            
-            #Draw filled cell
+
             pygame.draw.rect(
                 screen,
                 color,
-                (x * self.cell_size, visual_y * self.cell_size, 
-                 self.cell_size, self.cell_size)
+                (
+                    x * self.cell_size,
+                    visual_y * self.cell_size,
+                    self.cell_size,
+                    self.cell_size
+                )
             )
+
+
+    def draw_effects(self, screen: pygame.Surface, model: "FireModel"):
+        """Layer 2 — currently unused."""
+        pass
