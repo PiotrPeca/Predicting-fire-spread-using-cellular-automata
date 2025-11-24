@@ -125,12 +125,3 @@ class GridRenderer:
                 (x * self.cell_size, y * self.cell_size, 
                  self.cell_size, self.cell_size)
             )
-            
-            # Draw cell border
-            pygame.draw.rect(
-                screen,
-                BLACK,
-                (x * self.cell_size, y * self.cell_size,
-                 self.cell_size, self.cell_size),
-                1  # Border width
-            )
