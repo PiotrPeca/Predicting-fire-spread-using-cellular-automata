@@ -153,7 +153,7 @@ class SetupMenu:
 
 
             # value text
-            text_y = y + 5
+            text_y = y + (box_height - value_surf.get_height()) // 2
             value_rect = value_surf.get_rect(topleft=(value_x, text_y))
             self.screen.blit(value_surf, value_rect.topleft)
 
