@@ -114,14 +114,18 @@ class GridRenderer:
             screen: The Pygame surface to draw on.
             model: The fire spread model containing all cell agents.
         """
+        grid_height = model.grid.height
+
         for agent in model.agents:
             x, y = agent.pos
             color = self.get_cell_color(agent)
             
-            # Draw filled cell
+            visual_y = grid_height - 1 - y
+            
+            #Draw filled cell
             pygame.draw.rect(
                 screen,
                 color,
-                (x * self.cell_size, y * self.cell_size, 
+                (x * self.cell_size, visual_y * self.cell_size, 
                  self.cell_size, self.cell_size)
             )
