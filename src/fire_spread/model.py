@@ -29,6 +29,8 @@ class FireModel(Model):
         self.wind: dict
         self.ignite_prob: dict[tuple[int, int], float] = {}
         self.p0 = 0.05 #base_ignition_prob
+        self.spark_gust_threshold_kph = 40.0
+        self.spark_ignition_prob = 0.1
         self.wind_parametr_c1 = 0.05
         self.wind_parametr_c2 = 0.1
         
@@ -249,6 +251,7 @@ class FireModel(Model):
 
         for agent in self.agents:
             if isinstance(agent, ForestCell) and agent.state == CellState.Burning:
+                x,y = agent.pos
                 neighbours = self.grid.get_neighbors(agent.pos, moore=True, include_center=False)
                 for neighbour in neighbours:
                     if isinstance(neighbour, ForestCell) and neighbour.is_burnable():                       
@@ -264,6 +267,8 @@ class FireModel(Model):
                         prev_prob = self.ignite_prob.get(neighbour.pos, 0.0)
                         next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - p_burn)
                         self.ignite_prob[neighbour.pos] = max(0.0, min(1.0, next_prob))
+                self.apply_spark_probability(x,y)
+
 
     def update_wind(self):
         next_wind = rec = self.wind_provider.get_next_wind()
@@ -272,6 +277,7 @@ class FireModel(Model):
             return
         direction_degrees = next_wind.get('windDir', 0)
         speed = next_wind.get('windSpeedKPH', 0)
+        gust = next_wind.get('windGustKPH', 0)
 
         # Conversion from geography to Math grades
         math_degrees = (450 - direction_degrees) % 360
@@ -285,6 +291,7 @@ class FireModel(Model):
             'wind_y': wind_y,
             'speed': speed,
             'direction': direction_degrees,
+            'gust': gust
         }
         return
     
@@ -311,6 +318,59 @@ class FireModel(Model):
         exponent_content = V * (c1 + c2 * (cos_theta - 1))
 
         return math.exp(exponent_content)
+
+    def main_gust_direction(self):
+        wind_x = self.wind.get('wind_x', 0)
+        wind_y = self.wind.get('wind_y', 0)
+
+        if wind_x == 0 and wind_y == 0:
+            return (0,0)
+
+        if wind_x > 0:
+            dx = 1
+        elif wind_x < 0:
+            dx = -1
+        else:
+            dx = 0
+
+        if wind_y > 0:
+            dy = -1
+        elif wind_y < 0:
+            dy = 1
+        else:
+            dy = 0
+        return (dx, dy)
+    def apply_spark_probability(self, x: int, y: int) -> None:
+        gust = float(self.wind.get('gust', 0.0))
+
+        # za słaby poryw → brak iskier
+        if gust <= self.spark_gust_threshold_kph:
+            return
+
+        dx, dy = self.main_gust_direction()
+        if dx == 0 and dy == 0:
+            return
+
+        far_x = x + 2 * dx
+        far_y = y + 2 * dy
+        print(f"Iskraaa z ({x},{y}) -> ({far_x},{far_y})")
+
+        # jeśli poza planszą → nic nie robimy
+        if not (0 <= far_x < self.grid.width and 0 <= far_y < self.grid.height):
+            return
+
+        target = self.grid[far_x][far_y]
+
+        # musi być ForestCell i burnable
+        if not (isinstance(target, ForestCell) and target.is_burnable()):
+            return
+
+        prev = self.ignite_prob.get((far_x, far_y), 0.0)
+        p = self.spark_ignition_prob
+
+        next_p = 1.0 - (1.0 - prev) * (1.0 - p)
+        self.ignite_prob[(far_x, far_y)] = next_p
+
 
     def __str__(self):
         print("Model state:")
