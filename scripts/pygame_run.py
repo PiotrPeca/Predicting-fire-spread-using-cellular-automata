@@ -71,11 +71,11 @@ class SimulationRunner:
             fire_pos: Initial fire position (x, y) or None for center.
         """
         # Window setup
-        window_width = width * cell_size
-        window_height = height * cell_size + 300  # Extra space for UI
+        window_width = max(width * cell_size + 400, 1600)
+        window_height = max(height * cell_size + 400, 950)
         
         pygame.init()
-        self.screen = pygame.display.set_mode((window_width, window_height))
+        self.screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE)
         pygame.display.set_caption("Symulacja Pożaru Lasu")
         self.clock = pygame.time.Clock()
         
@@ -100,20 +100,16 @@ class SimulationRunner:
         
         # Visualization components
         self.renderer = GridRenderer(cell_size)
-        self.info_panel = InfoPanel()
         self.slider = SpeedSlider(
-            x=200,
-            y=height * cell_size + 55,
+            0, 0,
             width=400,
             height=20,
             min_val=MIN_FPS,
             max_val=MAX_FPS
         )
-        self.wind_rose = WindRose(
-            center_x=window_width - 120,
-            center_y=height * cell_size + 120,
-            radius=70
-        )
+        self.info_panel = InfoPanel(self.slider)
+
+        self.wind_rose = WindRose(0, 0)
         
         # Simulation state
         self.paused = False
@@ -124,7 +120,6 @@ class SimulationRunner:
         # Grid dimensions (for info panel)
         self.grid_height = height
         self.cell_size = cell_size
-        self.window_width = window_width
     
     def _handle_keyboard_events(self, event: pygame.event.Event) -> bool:
         """Handle keyboard input events.
@@ -195,13 +190,31 @@ class SimulationRunner:
     
     def _render(self) -> None:
         """Render all visual components to the screen."""
+        window_width, window_height = self.screen.get_size()
+
+        # Calculating offset to center elements
+        grid_width_px = self.width * self.cell_size
+        grid_height_px = self.height * self.cell_size
+
+        offset_x = (window_width - grid_width_px) // 2
+        offset_y = (window_height - (grid_height_px + 300)) // 2
+
+        self.offset_x = max(0, offset_x)
+        self.offset_y = max(0, offset_y)
+
+        # Right-bottom corner wind_rose
+        self.wind_rose.center_x, self.wind_rose.center_y = self.wind_rose.get_offset(10, window_width, window_height)
+
+
         self.screen.fill(WHITE)
         
         # LAYER 0 — Background
-        self.renderer.draw_background(self.screen, self.window_width, self.grid_height * self.cell_size + 300)
+        window_width, window_height = self.screen.get_size()
+        self.renderer.draw_background(self.screen, window_width, window_height)
+
 
         # LAYER 1 — Base grid
-        self.renderer.draw_base(self.screen, self.model)
+        self.renderer.draw_base(self.screen, self.model, self.offset_x, self.offset_y)
 
         # LAYER 2 — Fire effects / sprites / smoke
         self.renderer.draw_effects(self.screen, self.model)
@@ -209,6 +222,7 @@ class SimulationRunner:
         # LAYER 3 — UI is drawn below normally
         
         # Draw UI elements
+        window_width, window_height = self.screen.get_size()
         self.info_panel.draw(
             self.screen,
             self.model,
@@ -216,9 +230,9 @@ class SimulationRunner:
             self.current_fps,
             self.grid_height,
             self.cell_size,
-            self.window_width
+            window_width,
+            window_height
         )
-        self.slider.draw(self.screen, self.current_fps)
 
         # Draw wind rose
         wind_direction = 0
@@ -259,6 +273,19 @@ class SimulationRunner:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.info_panel.back_button_rect.collidepoint(event.pos):
                         return "BACK_TO_MENU"
+                    if self.info_panel.pause_button_rect.collidepoint(event.pos):
+                        self.paused = not self.paused
+                    if hasattr(self.info_panel, "reset_button_rect") and \
+                            self.info_panel.reset_button_rect.collidepoint(event.pos):
+
+                        self.model = FireModel(
+                            width=self.width,
+                            height=self.height,
+                            wind_provider=self.wind_provider,
+                            initial_fire_pos=self.initial_fire_pos
+                        )
+                        self.paused = False
+                        self.first_frame = True
             
             # Update simulation
             self._update_simulation()

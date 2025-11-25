@@ -128,7 +128,7 @@ class GridRenderer:
         screen.blit(bg, (0, 0))
 
 
-    def draw_base(self, screen: pygame.Surface, model: "FireModel"):
+    def draw_base(self, screen: pygame.Surface, model: "FireModel", offset_x, offset_y):
         """Layer 1 — grid terrain."""
         grid_height = model.grid.height
 
@@ -141,13 +141,12 @@ class GridRenderer:
                 screen,
                 color,
                 (
-                    x * self.cell_size,
-                    visual_y * self.cell_size,
+                    offset_x + x * self.cell_size,
+                    offset_y + visual_y * self.cell_size,
                     self.cell_size,
                     self.cell_size
                 )
             )
-
 
     def draw_effects(self, screen: pygame.Surface, model: "FireModel"):
         """Layer 2 — currently unused."""

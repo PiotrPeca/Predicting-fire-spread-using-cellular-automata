@@ -52,7 +52,7 @@ class SetupMenu:
     def __init__(self) -> None:
         """Initialize the setup menu with default parameters."""
         pygame.init()
-        self.screen = pygame.display.set_mode((800, 600))
+        self.screen = pygame.display.set_mode((800, 600), pygame.RESIZABLE)
         pygame.display.set_caption("Ustawienia Symulacji Pożaru")
         
         # Fonts
@@ -78,7 +78,7 @@ class SetupMenu:
         self.background_img = pygame.image.load(bg_path).convert()
 
         # Start button
-        self.start_button_rect = pygame.Rect(300, 500, 200, 50)
+        self.start_button_rect = pygame.Rect(0, 0, 200, 50)
 
         self.cursor_timer = 0
         self.cursor_visible = True
@@ -93,7 +93,7 @@ class SetupMenu:
         panel.fill(color)
         self.screen.blit(panel, rect.topleft)
 
-    def _draw_instructions(self, offset_y) -> None:
+    def _draw_instructions(self, offset_y, window_width) -> None:
         """Draw instruction text at the top of the menu."""
         lines = [
             "Kliknij na wartość aby ją zmienić",
@@ -103,7 +103,7 @@ class SetupMenu:
         y = offset_y
         for line in lines:
             text = self.font.render(line, True, WHITE)
-            x = 400 - text.get_width() // 2  # wyśrodkowanie
+            x = window_width // 2 - text.get_width() // 2
             self.screen.blit(text, (x, y))
             y += 28
 
@@ -121,10 +121,12 @@ class SetupMenu:
         ]
 
         y = start_y
-        center_x = 400
+        window_width, window_height = self.screen.get_size()
+        center_x = window_width // 2
 
         label_x = center_x - 200
         value_x = center_x + 100
+
 
         for label, key, value in params_list:
 
@@ -178,7 +180,11 @@ class SetupMenu:
             List of field definitions for hit detection.
         """
         # Draw menu background
-        bg = pygame.transform.scale(self.background_img, (800, 600))
+        window_width, window_height = self.screen.get_size()
+        center_x = window_width // 2
+        center_y = window_height // 2
+
+        bg = pygame.transform.scale(self.background_img, (window_width, window_height))
         self.screen.blit(bg, (0, 0))
         
         # HEADER BLOCK
@@ -186,7 +192,7 @@ class SetupMenu:
         title_surface = self.title_font.render(title_text, True, WHITE)
 
         # wyśrodkowanie
-        title_x = 400 - title_surface.get_width() // 2
+        title_x = center_x - title_surface.get_width() // 2
         title_y = 40
 
         # panel za headerem
@@ -201,18 +207,22 @@ class SetupMenu:
         self.screen.blit(title_surface, (title_x, title_y))
 
         # CONTENT BLOCK (instructions + parameter fields)
-        content_top = 130
-        content_left = 100
         content_width = 600
         content_height = 330  # dostosujesz jak zechcesz
+
+        content_left = center_x - content_width // 2
+        content_top = center_y - content_height // 2
 
         content_rect = pygame.Rect(content_left, content_top, content_width, content_height)
         self._draw_panel(content_rect)
 
-        next_y = self._draw_instructions(content_top + 20)
+        next_y = self._draw_instructions(content_top + 20, window_width)
         fields = self._draw_fields(next_y + 20)
 
         # START BUTTON
+        self.start_button_rect.centerx = center_x
+        self.start_button_rect.top = content_top + content_height + 20
+
         if self.start_button_rect.collidepoint(self.mouse_pos):
             pygame.draw.rect(self.screen, (255, 255, 255), self.start_button_rect, border_radius=12)  # jaśniejszy
         else:
