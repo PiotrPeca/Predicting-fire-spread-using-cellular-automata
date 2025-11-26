@@ -23,17 +23,16 @@ import requests
 logger = logging.getLogger(__name__)
 
 try:
+    # 1. Próba importu z kropką (dla działania wewnątrz symulacji/gry)
     from .constants import (
-        XWEATHER_CLIENT_ID,
-        XWEATHER_CLIENT_SECRET,
-        XWEATHER_BASE_URL,
-        CACHE_DIR,
-        MIN_YEAR,
-        MAX_DAYS_FUTURE,
+        XWEATHER_CLIENT_ID, XWEATHER_CLIENT_SECRET, XWEATHER_BASE_URL,
+        CACHE_DIR, MIN_YEAR, MAX_DAYS_FUTURE,
     )
 except ImportError:
-    raise ImportError(
-        "constants.py not found."
+    # 2. Próba importu bez kropki (dla bezpośredniego testowania pliku)
+    from constants import (
+        XWEATHER_CLIENT_ID, XWEATHER_CLIENT_SECRET, XWEATHER_BASE_URL,
+        CACHE_DIR, MIN_YEAR, MAX_DAYS_FUTURE,
     )
 
 

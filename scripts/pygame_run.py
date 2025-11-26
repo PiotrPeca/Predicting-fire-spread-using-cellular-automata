@@ -37,10 +37,10 @@ from visualization import (
 
 class SimulationRunner:
     """Main simulation runner with Pygame visualization.
-    
+
     Handles the main game loop, event processing, and coordination between
     the fire spread model and visualization components.
-    
+
     Attributes:
         model: The fire spread simulation model.
         screen: Pygame display surface.
@@ -53,51 +53,71 @@ class SimulationRunner:
         first_frame: Flag to skip the first step (show initial state).
         dragging_slider: Whether the user is dragging the speed slider.
     """
-    
+
     def __init__(
-        self,
-        width: int,
-        height: int,
-        cell_size: int,
-        fire_pos: Optional[tuple[int, int]]
+            self,
+            width: int,
+            height: int,
+            cell_size: int,
+            fire_pos: Optional[tuple[int, int]]
     ) -> None:
         """Initialize the simulation runner.
-        
+
         Args:
             width: Grid width in cells.
             height: Grid height in cells.
             cell_size: Size of each cell in pixels.
-            wind: Wind vector [x, y].
             fire_pos: Initial fire position (x, y) or None for center.
         """
         # Window setup
         window_width = width * cell_size
         window_height = height * cell_size + 300  # Extra space for UI
-        
+
         pygame.init()
         self.screen = pygame.display.set_mode((window_width, window_height))
         pygame.display.set_caption("Symulacja Pożaru Lasu")
         self.clock = pygame.time.Clock()
-        
+
         # Store initial parameters for reset
         self.width = width
         self.height = height
+
+        # 1. Inicjalizacja Providera
         self.wind_provider = WindProvider(61.62453, 14.69939)
 
-        from_date = datetime.fromisoformat("2018-07-05T14:00:00")
-        to_date = from_date + timedelta(days=10)
+        # 2. Definicja dat (Pożar w Szwecji 2018)
+        # 12:00 to bezpieczna godzina startu
+        from_date = datetime.fromisoformat("2018-07-05T12:00:00")
+        to_date = from_date + timedelta(days=30)
+
+        # --- NOWOŚĆ: Pobranie harmonogramu suszy (Sielianinowa) ---
+        print("Generowanie mapy suszy (Sielianinow)...")
+        self.htc_schedule = self.wind_provider.get_daily_sielianinov_map(
+            fire_start_date=from_date,
+            fire_end_date=to_date,
+            history_days=30
+        )
+        # ----------------------------------------------------------
+
+        # 3. Pobranie danych wiatrowych (standardowo)
+        print("Pobieranie danych wiatrowych...")
         self.wind_provider.fetch_data(from_date=from_date, to_date=to_date)
 
         self.initial_fire_pos = fire_pos
-        
-        # Create model
+
+        # 4. Tworzenie modelu
         self.model = FireModel(
             width=width,
             height=height,
             wind_provider=self.wind_provider,
             initial_fire_pos=fire_pos
         )
-        
+
+        # --- NOWOŚĆ: Wstrzyknięcie mapy suszy do modelu ---
+        # Dzięki temu model wie, jak bardzo jest sucho w danym dniu
+        self.model.htc_schedule = self.htc_schedule
+        # --------------------------------------------------
+
         # Visualization components
         self.renderer = GridRenderer(cell_size)
         self.info_panel = InfoPanel()
@@ -114,13 +134,13 @@ class SimulationRunner:
             center_y=height * cell_size + 120,
             radius=70
         )
-        
+
         # Simulation state
         self.paused = False
         self.current_fps = DEFAULT_FPS
         self.first_frame = True
         self.dragging_slider = False
-        
+
         # Grid dimensions (for info panel)
         self.grid_height = height
         self.cell_size = cell_size
@@ -149,6 +169,7 @@ class SimulationRunner:
                 wind_provider=self.wind_provider,
                 initial_fire_pos=self.initial_fire_pos
             )
+            self.model.htc_schedule = self.htc_schedule
             self.paused = False
             self.first_frame = True
         

@@ -7,6 +7,7 @@ import math
 from .cell import ForestCell, FuelType, CellState, VegetationType, VegetationDensity
 from .wind_provider import WindProvider
 from collections import deque
+from datetime import datetime
 
 
 
@@ -28,6 +29,8 @@ class FireModel(Model):
         self.wind_provider = wind_provider
         self.wind: dict
         self.ignite_prob: dict[tuple[int, int], float] = {}
+        self.htc_schedule = {}  # Tu wpadnie harmonogram współczynników sielianowa
+        self.drought_multiplier = 1.0
         self.p0 = 0.05 #base_ignition_prob
         self.spark_gust_threshold_kph = 40.0
         self.spark_ignition_prob = 0.1
@@ -248,6 +251,7 @@ class FireModel(Model):
         then all agents update to their next state. This ensures synchronous updates.
         """
         self.update_wind()
+        self._update_drought_multiplier()
         self._prepare_ignite_probabilities()
 
         # Phase 1: Calculate next states
@@ -276,7 +280,7 @@ class FireModel(Model):
                         p_veg = neighbour.fuel.p_veg
                         p_dens = neighbour.fuel.p_dens
                         p_w = self.calculate_wind_ignition_prob(agent.pos, neighbour.pos)
-                        p_burn = self.p0 * (1.0 + p_veg) * (1.0 + p_dens) * p_w
+                        p_burn = self.p0 * (1.0 + p_veg) * (1.0 + p_dens) * p_w * self.drought_multiplier
                         p_burn = max(0.0, min(1.0, p_burn))
 
                         # Combine with previous probability using independent sources formula
@@ -294,6 +298,7 @@ class FireModel(Model):
         direction_degrees_from = next_wind.get('windDir', 0)
         speed = next_wind.get('windSpeedKPH', 0)
         gust = next_wind.get('windGustKPH', 0)
+        timestamp = next_wind.get('timestamp', 0)
 
         # Conversion from geography to Math grades
         dir_to = (direction_degrees_from + 180.0) % 360.0
@@ -308,7 +313,8 @@ class FireModel(Model):
             'wind_y': wind_y,
             'speed': speed,
             'direction': direction_degrees_from,
-            'gust': gust
+            'gust': gust,
+            'timestamp': timestamp
         }
         return
     
@@ -388,10 +394,31 @@ class FireModel(Model):
         next_p = 1.0 - (1.0 - prev) * (1.0 - p)
         self.ignite_prob[(far_x, far_y)] = next_p
 
+    def _update_drought_multiplier(self):
+        """
+        Sprawdza datę i aktualizuje mnożnik ryzyka (suszy).
+        """
+        # Pobieramy czas z aktualnych danych wiatrowych
+        current_ts = self.wind.get('timestamp')
+
+        if current_ts:
+            dt = datetime.fromtimestamp(current_ts)
+            date_key = dt.strftime('%Y-%m-%d')
+
+            # Sprawdzamy czy mamy obliczony Sielianinow dla tego dnia
+            if date_key in self.htc_schedule:
+                htc = self.htc_schedule[date_key]
+                # Zabezpieczenie: Mnożnik = 1 / HTC (im mniej wilgoci, tym większy mnożnik)
+                safe_htc = max(0.1, htc)
+                self.drought_multiplier = 1.0 / safe_htc
+            else:
+                self.drought_multiplier = 1.0
+
 
     def __str__(self):
         print("Model state:")
         print(self.wind)
+        print(f' Współczynnik sielianowa {1/self.drought_multiplier}')
         for pos, prob in sorted(self.ignite_prob.items()):
             if prob > 0:
                 print(f"  {pos}: {prob:.3f}")
