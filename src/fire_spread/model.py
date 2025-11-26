@@ -6,32 +6,35 @@ import math
 
 from .cell import ForestCell, FuelType, CellState, VegetationType, VegetationDensity
 from .wind_provider import WindProvider
+from .terrain import Terrain
 from collections import deque
 from datetime import datetime
+from typing import Optional
 
 
 
 class FireModel(Model):
     """Main model for fire spread simulation using cellular automata."""
 
-    def __init__(self, width: int, height: int, wind_provider: WindProvider, initial_fire_pos: tuple[int, int] | None = None):
-        """
-        Initialize the fire spread model.
-        
-        Args:
-            width: Width of the grid (number of cells)
-            height: Height of the grid (number of cells)
-            wind: Wind direction on x and y axes as a list [wind_x, wind_y]
-            initial_fire_pos: Optional tuple specifying the initial fire position (x, y).
-        """
+    def __init__(self, width: int, height: int, wind_provider: WindProvider, initial_fire_pos: tuple[int, int] | None = None, terrain: Optional[Terrain] = None):
         super().__init__()
+
         self.grid = SingleGrid(width, height, torus=False)
+        self.terrain = terrain
+        
+        if self.terrain:
+            terrain_height, terrain_width = self.terrain.get_dimensions()
+            if (terrain_width, terrain_height) != (width, height):
+                raise ValueError(
+                    "Terrain dimensions do not match provided grid size. "
+                    "Create the Terrain with target_size=(height, width) before passing it to FireModel."
+                )
         self.wind_provider = wind_provider
         self.wind: dict
         self.ignite_prob: dict[tuple[int, int], float] = {}
         self.htc_schedule = {}  # Tu wpadnie harmonogram współczynników sielianowa
         self.drought_multiplier = 1.0
-        self.p0 = 0.05 #base_ignition_prob
+        self.p0 = 0.09 #base_ignition_prob
         self.spark_gust_threshold_kph = 40.0
         self.spark_ignition_prob = 0.1
         self.wind_parametr_c1 = 0.05
@@ -140,41 +143,13 @@ class FireModel(Model):
         }
 
 
-        # Initialize grid with fuel cells with random terrain generation
         for content, (x, y) in self.grid.coord_iter():
-            # Random terrain generation with weighted probabilities
-            rand_val = self.random.random()
-            
-            if rand_val < 0.05:  # 5% water
-                fuel = self.fuel_types["water"]
-            elif rand_val < 0.08:  # 3% roads
-                road_type = self.random.choice(["road_primary", "road_secondary", "road_tertiary"])
-                fuel = self.fuel_types[road_type]
-            elif rand_val < 0.48:  # 40% forest (various densities)
-                density = self.random.choice(["sparse", "normal", "dense"])
-                fuel = self.fuel_types[f"forest_{density}"]
-            elif rand_val < 0.8:  # 32% shrub (various densities)
-                density = self.random.choice(["sparse", "normal", "dense"])
-                fuel = self.fuel_types[f"shrub_{density}"]
-            else:  # 20% cultivated (various densities)
-                density = self.random.choice(["sparse", "normal", "dense"])
-                fuel = self.fuel_types[f"cultivated_{density}"]
-
-            #dla calów sprawdzania czy wiatr dobrze działa tworzenie samego lasu
-            # if rand_val < 0.00:  # 5% water
-            #     fuel = self.fuel_types["water"]
-            # elif rand_val < 0.00:  # 3% roads
-            #     road_type = self.random.choice(["road_primary", "road_secondary", "road_tertiary"])
-            #     fuel = self.fuel_types[road_type]
-            # elif rand_val < 1.0:  # 40% forest (various densities)
-            #     density = "sparse"
-            #     fuel = self.fuel_types[f"forest_{density}"]
-            # elif rand_val < 0.0:  # 32% shrub (various densities)
-            #     density = self.random.choice(["sparse", "normal", "dense"])
-            #     fuel = self.fuel_types[f"shrub_{density}"]
-            # else:  # 20% cultivated (various densities)
-            #     density = self.random.choice(["sparse", "normal", "dense"])
-            #     fuel = self.fuel_types[f"cultivated_{density}"]
+            if self.terrain:
+                terrain_cell = self.terrain.get_grid()[y, x]
+                fuel_type_key = terrain_cell["fuel_type"]
+                fuel = self.fuel_types.get(fuel_type_key, self.fuel_types["water"])
+            else:
+                fuel = self._generate_random_fuel()
 
             state = CellState.Fuel
             cell = ForestCell((x, y), self, fuel, state)
@@ -205,6 +180,23 @@ class FireModel(Model):
                       f"Igniting nearest burnable cell at {fire_cell.pos} instead.")
             else:
                 print(f"Critical: No burnable cells found in the entire grid!")
+
+    def _generate_random_fuel(self) -> FuelType:
+        rand_val = self.random.random()
+        if rand_val < 0.05:
+            return self.fuel_types["water"]
+        elif rand_val < 0.08:
+            road_type = self.random.choice(["road_primary", "road_secondary", "road_tertiary"])
+            return self.fuel_types[road_type]
+        elif rand_val < 0.48:
+            density = self.random.choice(["sparse", "normal", "dense"])
+            return self.fuel_types[f"forest_{density}"]
+        elif rand_val < 0.8:
+            density = self.random.choice(["sparse", "normal", "dense"])
+            return self.fuel_types[f"shrub_{density}"]
+        else:
+            density = self.random.choice(["sparse", "normal", "dense"])
+            return self.fuel_types[f"cultivated_{density}"]
 
     def _find_nearest_burnable(self, start_pos: tuple[int, int]) -> ForestCell | None:
         """

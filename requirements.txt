@@ -2,8 +2,9 @@
 mesa>=3.0.0
 pygame
 requests
+rasterio
+numpy
 
 # Data analysis (optional, for future enhancements)
-# numpy>=1.24.0
 # pandas>=2.0.0
 # matplotlib>=3.7.0

@@ -21,6 +21,7 @@ src_path = project_root / "src"
 sys.path.insert(0, str(src_path))
 
 from fire_spread import FireModel, CellState, WindProvider
+from fire_spread.terrain import Terrain
 
 from visualization import (
     GridRenderer,
@@ -106,11 +107,13 @@ class SimulationRunner:
         self.initial_fire_pos = fire_pos
 
         # 4. Tworzenie modelu
+        self.terrain = self._load_terrain(width, height)
         self.model = FireModel(
             width=width,
             height=height,
             wind_provider=self.wind_provider,
-            initial_fire_pos=fire_pos
+            initial_fire_pos=fire_pos,
+            terrain=self.terrain
         )
 
         # --- NOWOŚĆ: Wstrzyknięcie mapy suszy do modelu ---
@@ -167,13 +170,29 @@ class SimulationRunner:
                 width=self.width,
                 height=self.height,
                 wind_provider=self.wind_provider,
-                initial_fire_pos=self.initial_fire_pos
+                initial_fire_pos=self.initial_fire_pos,
+                terrain=self.terrain
             )
             self.model.htc_schedule = self.htc_schedule
             self.paused = False
             self.first_frame = True
         
         return True
+
+    def _load_terrain(self, width: int, height: int) -> Optional[Terrain]:
+        terrain_path = project_root / "data" / "las_20m_resolution.tif"
+        if not terrain_path.exists():
+            print(f"Brak pliku terenu pod ścieżką {terrain_path}, używam losowego rozmieszczenia.")
+            return None
+        try:
+            return Terrain(
+                tiff_path=str(terrain_path),
+                target_size=(height, width),
+                meters_per_pixel=40,
+            )
+        except Exception as exc:
+            print(f"Nie udało się wczytać terenu: {exc}. Używam losowego rozmieszczenia.")
+            return None
     
     def _handle_slider_events(self, event: pygame.event.Event) -> None:
         """Handle slider interaction events.
