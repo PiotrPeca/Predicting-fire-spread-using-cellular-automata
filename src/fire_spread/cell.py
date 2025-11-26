@@ -14,10 +14,65 @@ class CellState(Enum):
     Burned = 3
 
 
+class VegetationType(Enum):
+    """Types of vegetation."""
+    NO_VEGETATION = "no_vegetation"
+    CULTIVATED = "cultivated"
+    FORESTS = "forests"
+    SHRUB = "shrub"
+    WATER = "water"
+    ROAD_PRIMARY = "road_primary"
+    ROAD_SECONDARY = "road_secondary"
+    ROAD_TERTIARY = "road_tertiary"
+
+
+class VegetationDensity(Enum):
+    """Density of vegetation."""
+    NO_VEGETATION = "no_vegetation"
+    SPARSE = "sparse"
+    NORMAL = "normal"
+    DENSE = "dense"
+    WATER = "water"
+    ROAD_PRIMARY = "road_primary"
+    ROAD_SECONDARY = "road_secondary"
+    ROAD_TERTIARY = "road_tertiary"
+
+
 class FuelType:
     """Represents a type of fuel with specific burning properties."""
     
-    def __init__(self, name: str, burn_time: int, color: str):
+    # Vegetation type probability factors (p_veg)
+    P_VEG_VALUES = {
+        VegetationType.NO_VEGETATION: -1.0,
+        VegetationType.CULTIVATED: -0.4,
+        VegetationType.FORESTS: 0.4,
+        VegetationType.SHRUB: 0.4,
+        VegetationType.WATER: -0.4,
+        VegetationType.ROAD_PRIMARY: -0.8,
+        VegetationType.ROAD_SECONDARY: -0.7,
+        VegetationType.ROAD_TERTIARY: -0.4,
+    }
+    
+    # Vegetation density probability factors (p_dens)
+    P_DENS_VALUES = {
+        VegetationDensity.NO_VEGETATION: -1.0,
+        VegetationDensity.SPARSE: -0.3,
+        VegetationDensity.NORMAL: 0.0,
+        VegetationDensity.DENSE: 0.3,
+        VegetationDensity.WATER: -0.4,
+        VegetationDensity.ROAD_PRIMARY: -0.8,
+        VegetationDensity.ROAD_SECONDARY: -0.7,
+        VegetationDensity.ROAD_TERTIARY: -0.4,
+    }
+
+    def __init__(
+        self, 
+        name: str, 
+        burn_time: int, 
+        color: str, 
+        veg_type: VegetationType, 
+        veg_density: VegetationDensity
+    ):
         """
         Initialize a fuel type.
         
@@ -25,13 +80,21 @@ class FuelType:
             name: Name of the fuel type (e.g., "grass", "tree", "water")
             burn_time: Duration the fuel burns for (in simulation steps)
             color: Color representation for visualization
+            veg_type: Type of vegetation
+            veg_density: Density of vegetation
         """
         self.name = name
         self.burn_time = burn_time
         self.color = color
+        self.veg_type = veg_type
+        self.veg_density = veg_density
+        self.p_veg = self.P_VEG_VALUES[veg_type]
+        self.p_dens = self.P_DENS_VALUES[veg_density]
 
     def __str__(self) -> str:
-        return f"Fuel type: {self.name}, burn time: {self.burn_time}"
+        return (f"Fuel type: {self.name}, burn time: {self.burn_time}, "
+                f"veg_type: {self.veg_type.value}, veg_density: {self.veg_density.value}, "
+                f"p_veg: {self.p_veg}, p_dens: {self.p_dens}")
 
 
 class ForestCell(Agent):
@@ -60,24 +123,6 @@ class ForestCell(Agent):
         self.state = state
         self.burn_timer = int(fuel.burn_time) if state == CellState.Burning else 0
         self.next_state = state
-
-    def add_two_pos(
-        self, 
-        pos1: list[int], 
-        pos2: list[int]
-    ) -> list[int]:
-        """
-        Add two position vectors.
-
-        Args:
-            pos1: First position vector [x1, y1]
-            pos2: Second position vector [x2, y2]
-        
-        Returns:
-            Resulting position vector [x1 + x2, y1 + y2]
-        """
-        pos_result = [x + y for x, y in zip(pos1, pos2)]
-        return pos_result
     
     def is_burnable(self) -> bool:
         """
@@ -86,41 +131,18 @@ class ForestCell(Agent):
         Returns:
             True if the cell contains fuel and is not already burning/burned
         """
-        if self.fuel.name == "water" or self.state != CellState.Fuel:
+        # Non-burnable types: water, roads, no vegetation, or already burning/burned
+        non_burnable_types = {
+            VegetationType.WATER,
+            VegetationType.ROAD_PRIMARY,
+            VegetationType.ROAD_SECONDARY,
+            VegetationType.ROAD_TERTIARY,
+            VegetationType.NO_VEGETATION
+        }
+
+        if self.fuel.veg_type in non_burnable_types or self.state != CellState.Fuel:
             return False
         return True
-
-    def burning_chance(self) -> float:
-        """
-        Calculate the probability of this cell catching fire.
-        
-        Returns:
-            Probability value between 0 and 1 based on burning neighbors
-        """
-        # Calculate burning chance based on neighboring burning cells and wind direction
-        burning_chance = 0
-        burning_index = 0.1
-        # Neighbors for moore neighborhood
-        neighbours = self.model.grid.get_neighbors(self.pos, moore=True, include_center=False)
-        # Calculate influence of each burning neighbor
-        for neighbour in neighbours:
-            if isinstance(neighbour, ForestCell) and neighbour.state == CellState.Burning:
-                # Determine relative position to apply wind effect
-                rel_x = neighbour.pos[0] - self.pos[0]
-                rel_y = neighbour.pos[1] - self.pos[1]
-                neighbour_relative_pos = [rel_x, rel_y]
-                wind_pos = self.add_two_pos(neighbour_relative_pos, self.model.wind)
-                wind_abs_pos = sum(abs(x) for x in wind_pos)
-                # Adjust burning chance based on wind influence
-                if wind_abs_pos < 0.1:
-                    burning_chance += burning_index * 2
-                elif wind_abs_pos == 1:
-                    burning_chance += burning_index * 1.5
-                elif wind_abs_pos == 2 and (self.add_two_pos(list(neighbour.pos), self.model.wind) in neighbours):
-                    burning_chance += burning_index
-                else:
-                    burning_chance += burning_index * 0.5
-        return burning_chance
 
     def step(self):
         """
@@ -140,9 +162,10 @@ class ForestCell(Agent):
         
         # Handle fuel cells that might catch fire
         if self.is_burnable():
-            p = self.burning_chance()
-            if self.model.random.random() < p:
+            ignition_prob = self.model.ignite_prob.get(self.pos, 0.0)
+            if ignition_prob > 0 and self.model.random.random() < ignition_prob:
                 self.next_state = CellState.Burning
+                self.burn_timer = int(self.fuel.burn_time)
 
     def advance(self):
         """

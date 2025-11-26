@@ -6,6 +6,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Secrets
+src/fire_spread/constants.py
+
 # C extensions
 *.so
 
@@ -196,3 +199,7 @@ output/
 logs/
 *.log
 results/
+
+# Scientific article
+1-s2.0-S0096300308004943-main.pdf
+nhess-2018-227.pdf

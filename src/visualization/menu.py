@@ -10,7 +10,7 @@ import sys
 
 import pygame
 
-from .colors import WHITE, BLACK, RED, BLUE, GRAY, GREEN
+from .colors import WHITE, BLACK, BURNING_COLOR, FOREST_NORMAL_COLOR
 from .colors import DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_CELL_SIZE
 
 
@@ -21,16 +21,12 @@ class SimulationParams(TypedDict):
         width: Grid width in cells.
         height: Grid height in cells.
         cell_size: Size of each cell in pixels.
-        wind_x: Wind component in X direction.
-        wind_y: Wind component in Y direction.
         fire_x: Initial fire X position (None for auto-center).
         fire_y: Initial fire Y position (None for auto-center).
     """
     width: int
     height: int
     cell_size: int
-    wind_x: int
-    wind_y: int
     fire_x: Optional[int]
     fire_y: Optional[int]
 
@@ -68,8 +64,6 @@ class SetupMenu:
             'width': DEFAULT_WIDTH,
             'height': DEFAULT_HEIGHT,
             'cell_size': DEFAULT_CELL_SIZE,
-            'wind_x': 1,
-            'wind_y': 0,
             'fire_x': None,
             'fire_y': None,
         }
@@ -83,14 +77,13 @@ class SetupMenu:
         instructions = [
             "Kliknij na wartość aby ją zmienić",
             "None = automatyczny środek siatki",
-            "Wiatr: dodatni = wschód/północ, ujemny = zachód/południe",
             "",
             "Naciśnij ENTER aby rozpocząć symulację"
         ]
         
         y_offset = 100
         for i, line in enumerate(instructions):
-            text = self.small_font.render(line, True, GRAY)
+            text = self.small_font.render(line, True, BLACK)
             self.screen.blit(text, (50, y_offset + i * 25))
     
     def _draw_fields(self) -> list[tuple[str, str, any]]:
@@ -105,8 +98,6 @@ class SetupMenu:
             ('Szerokość siatki:', 'width', self.params['width']),
             ('Wysokość siatki:', 'height', self.params['height']),
             ('Rozmiar komórki (px):', 'cell_size', self.params['cell_size']),
-            ('Wiatr X (→/←):', 'wind_x', self.params['wind_x']),
-            ('Wiatr Y (↑/↓):', 'wind_y', self.params['wind_y']),
             ('Pożar X:', 'fire_x', 
              self.params['fire_x'] if self.params['fire_x'] is not None else 'None'),
             ('Pożar Y:', 'fire_y',
@@ -120,14 +111,14 @@ class SetupMenu:
             
             # Draw value (red if active, blue otherwise)
             display_value = self.input_text if self.active_field == key else str(value)
-            value_color = RED if self.active_field == key else BLUE
+            value_color = BURNING_COLOR if self.active_field == key else FOREST_NORMAL_COLOR
             value_text = self.font.render(display_value, True, value_color)
             value_rect = value_text.get_rect(topleft=(450, y_offset + i * 40))
             self.screen.blit(value_text, value_rect.topleft)
             
             # Draw cursor if field is active
             if self.active_field == key:
-                cursor = self.font.render("_", True, RED)
+                cursor = self.font.render("_", True, BURNING_COLOR)
                 self.screen.blit(cursor, (value_rect.right + 5, y_offset + i * 40))
         
         return fields
@@ -151,7 +142,7 @@ class SetupMenu:
         fields = self._draw_fields()
         
         # Start button
-        start_text = self.title_font.render("ENTER - START", True, GREEN)
+        start_text = self.title_font.render("ENTER - START", True, FOREST_NORMAL_COLOR)
         self.screen.blit(start_text, (250, 520))
         
         pygame.display.flip()

@@ -7,8 +7,9 @@ showing simulation status and the speed control slider.
 from typing import TYPE_CHECKING, Optional
 
 import pygame
+import math
 
-from .colors import WHITE, BLACK, GRAY, RED
+from .colors import WHITE, BLACK, BURNING_COLOR
 
 if TYPE_CHECKING:
     from fire_spread.model import FireModel
@@ -57,7 +58,7 @@ class InfoPanel:
         pygame.draw.rect(
             screen,
             WHITE,
-            (0, panel_y, window_width, 100)
+            (0, panel_y, window_width, 300)
         )
         
         # Step counter
@@ -131,7 +132,7 @@ class SpeedSlider:
             current_val: Current FPS value to display.
         """
         # Draw slider bar background
-        pygame.draw.rect(screen, GRAY, (self.x, self.y, self.width, self.height))
+        pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height))
         
         # Calculate handle position
         ratio = (current_val - self.min_val) / (self.max_val - self.min_val)
@@ -140,7 +141,7 @@ class SpeedSlider:
         # Draw circular handle
         pygame.draw.circle(
             screen,
-            RED,
+            BURNING_COLOR,
             (handle_x, self.y + self.height // 2),
             10  # Handle radius
         )
@@ -165,3 +166,125 @@ class SpeedSlider:
                 return max(self.min_val, min(self.max_val, int(new_val)))
         
         return None
+
+class WindRose:
+    """Displays wind direction and speed as a compass rose.
+    
+    Shows a circular compass with 16 cardinal directions and a bi-directional 
+    arrow indicating current wind direction and speed.
+    
+    Attributes:
+        center_x: X coordinate of the compass center.
+        center_y: Y coordinate of the compass center.
+        radius: Radius of the compass circle.
+        font: Font for direction labels.
+    """
+    
+    def __init__(self, center_x: int, center_y: int, radius: int = 70):
+        """Initialize the wind rose.
+        
+        Args:
+            center_x: X coordinate of the compass center.
+            center_y: Y coordinate of the compass center.
+            radius: Radius of the compass circle (increased for 16 directions).
+        """
+        self.center_x = center_x
+        self.center_y = center_y
+        self.radius = radius
+        self.font = pygame.font.Font(None, 18)  # Smaller font for more labels
+    
+    def draw(self, screen: pygame.Surface, wind_direction: float, wind_speed: float) -> None:
+        """Draw the wind rose with current wind direction and speed.
+        
+        Args:
+            screen: The Pygame surface to draw on.
+            wind_direction: Wind direction in geographic degrees (0° = North, clockwise).
+            wind_speed: Wind speed in km/h.
+        """
+        # Draw circle background
+        pygame.draw.circle(screen, (240, 240, 240), (self.center_x, self.center_y), self.radius)
+        pygame.draw.circle(screen, (50, 50, 50), (self.center_x, self.center_y), self.radius, 2)
+        
+        # Draw all 16 compass directions
+        directions = [
+            ("N", 0), ("NNE", 22.5), ("NE", 45), ("ENE", 67.5),
+            ("E", 90), ("ESE", 112.5), ("SE", 135), ("SSE", 157.5),
+            ("S", 180), ("SSW", 202.5), ("SW", 225), ("WSW", 247.5),
+            ("W", 270), ("WNW", 292.5), ("NW", 315), ("NNW", 337.5)
+        ]
+        
+        for label, angle_deg in directions:
+            # Convert to radians (0° = North = up)
+            angle_rad = math.radians(angle_deg)
+            
+            # Calculate position (add offset for text)
+            text_distance = self.radius + 25
+            text_x = self.center_x + text_distance * math.sin(angle_rad)
+            text_y = self.center_y - text_distance * math.cos(angle_rad)
+            
+            text_surface = self.font.render(label, True, BLACK)
+            text_rect = text_surface.get_rect(center=(text_x, text_y))
+            screen.blit(text_surface, text_rect)
+        
+        # Draw wind direction arrow
+        # Wind direction means WHERE wind is COMING FROM
+        # Arrow should point WHERE wind is GOING TO (opposite direction)
+        # So we add 180° to reverse the arrow
+        blowing_to_direction = wind_direction + 180
+
+        # Convert geography degrees to math radians
+        # Geography: 0° = North, clockwise
+        # Math: 0° = East, counter-clockwise
+        # So: math_angle = 90° - geo_angle
+        math_angle_deg = 90 - blowing_to_direction
+        math_angle_rad = math.radians(math_angle_deg)
+        
+        # Arrow length proportional to wind speed (but capped)
+        arrow_length = self.radius - 15
+        
+        # Calculate arrow tip (red end - shows WHERE wind is blowing TO)
+        tip_x = self.center_x + arrow_length * math.cos(math_angle_rad)
+        tip_y = self.center_y - arrow_length * math.sin(math_angle_rad)
+        
+        # Calculate arrow tail (black end - shows WHERE wind is coming FROM)
+        tail_x = self.center_x - arrow_length * math.cos(math_angle_rad)
+        tail_y = self.center_y + arrow_length * math.sin(math_angle_rad)
+        
+        # Draw arrow shaft (black to red gradient)
+        pygame.draw.line(screen, (100, 100, 100), (tail_x, tail_y), 
+                        (self.center_x, self.center_y), 4)
+        pygame.draw.line(screen, (200, 0, 0), (self.center_x, self.center_y), 
+                        (tip_x, tip_y), 4)
+        
+        # Draw arrowhead (red triangle at tip)
+        arrowhead_size = 10
+        arrowhead_angle1 = math_angle_rad + math.radians(150)
+        arrowhead_angle2 = math_angle_rad - math.radians(150)
+        
+        arrowhead_point1 = (
+            tip_x + arrowhead_size * math.cos(arrowhead_angle1),
+            tip_y - arrowhead_size * math.sin(arrowhead_angle1)
+        )
+        arrowhead_point2 = (
+            tip_x + arrowhead_size * math.cos(arrowhead_angle2),
+            tip_y - arrowhead_size * math.sin(arrowhead_angle2)
+        )
+        
+        pygame.draw.polygon(screen, (200, 0, 0), 
+                            [(tip_x, tip_y), arrowhead_point1, arrowhead_point2])
+            
+        # Draw wind speed display box below compass
+        box_width = 140
+        box_height = 40
+        box_x = self.center_x - box_width // 2
+        box_y = self.center_y + self.radius + 35
+        
+        # Draw box background and border
+        pygame.draw.rect(screen, (255, 255, 255), (box_x, box_y, box_width, box_height))
+        pygame.draw.rect(screen, (50, 50, 50), (box_x, box_y, box_width, box_height), 2)
+        
+        # Draw speed text centered in box
+        speed_text = f"Wiatr: {wind_speed:.1f} km/h"
+        speed_surface = self.font.render(speed_text, True, BLACK)
+        speed_rect = speed_surface.get_rect(center=(self.center_x, box_y + box_height // 2))
+        screen.blit(speed_surface, speed_rect)
