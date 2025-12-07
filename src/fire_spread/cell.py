@@ -44,7 +44,7 @@ class FuelType:
     # Vegetation type probability factors (p_veg)
     P_VEG_VALUES = {
         VegetationType.NO_VEGETATION: -1.0,
-        VegetationType.CULTIVATED: -0.4,
+        VegetationType.CULTIVATED: -0.2,
         VegetationType.FORESTS: 0.4,
         VegetationType.SHRUB: 0.4,
         VegetationType.WATER: -0.4,
@@ -165,7 +165,7 @@ class ForestCell(Agent):
             ignition_prob = self.model.ignite_prob.get(self.pos, 0.0)
             if ignition_prob > 0 and self.model.random.random() < ignition_prob:
                 self.next_state = CellState.Burning
-                self.burn_timer = int(self.fuel.burn_time)
+                # burn_timer will be set in advance()
 
     def advance(self):
         """
@@ -174,9 +174,14 @@ class ForestCell(Agent):
         This two-phase update ensures all cells calculate their next state
         before any state changes are applied.
         """
-        prev = self.state
+        prev_state = self.state
         self.state = self.next_state
-
-        # Reset burn timer when transitioning to burning
-        if prev != CellState.Burning and self.state == CellState.Burning:
+        
+        # Update burning cells tracking for performance optimization
+        if prev_state != CellState.Burning and self.state == CellState.Burning:
+            # Cell started burning - add to tracking and reset burn timer
             self.burn_timer = int(self.fuel.burn_time)
+            self.model.burning_cells.add(self.pos)
+        elif prev_state == CellState.Burning and self.state != CellState.Burning:
+            # Cell stopped burning - remove from tracking
+            self.model.burning_cells.discard(self.pos)

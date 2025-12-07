@@ -22,18 +22,26 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Importy stałych - próbujemy różnych wariantów, aż jeden zadziała
 try:
-    # 1. Próba importu z kropką (dla działania wewnątrz symulacji/gry)
     from .constants import (
         XWEATHER_CLIENT_ID, XWEATHER_CLIENT_SECRET, XWEATHER_BASE_URL,
         CACHE_DIR, MIN_YEAR, MAX_DAYS_FUTURE,
     )
 except ImportError:
-    # 2. Próba importu bez kropki (dla bezpośredniego testowania pliku)
-    from constants import (
-        XWEATHER_CLIENT_ID, XWEATHER_CLIENT_SECRET, XWEATHER_BASE_URL,
-        CACHE_DIR, MIN_YEAR, MAX_DAYS_FUTURE,
-    )
+    try:
+        from constants import (
+            XWEATHER_CLIENT_ID, XWEATHER_CLIENT_SECRET, XWEATHER_BASE_URL,
+            CACHE_DIR, MIN_YEAR, MAX_DAYS_FUTURE,
+        )
+    except ImportError:
+        import fire_spread.constants as constants_module
+        XWEATHER_CLIENT_ID = constants_module.XWEATHER_CLIENT_ID
+        XWEATHER_CLIENT_SECRET = constants_module.XWEATHER_CLIENT_SECRET
+        XWEATHER_BASE_URL = constants_module.XWEATHER_BASE_URL
+        CACHE_DIR = constants_module.CACHE_DIR
+        MIN_YEAR = constants_module.MIN_YEAR
+        MAX_DAYS_FUTURE = constants_module.MAX_DAYS_FUTURE
 
 
 class WeatherAPIWrapper:

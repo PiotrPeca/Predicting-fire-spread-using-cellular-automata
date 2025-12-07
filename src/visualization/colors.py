@@ -52,9 +52,9 @@ WHITE: Color = (255, 255, 255)                      # Background
 # DEFAULT SIMULATION PARAMETERS
 # ============================================================================
 
-DEFAULT_WIDTH: int = 200                            # Grid width in cells
-DEFAULT_HEIGHT: int = 100                           # Grid height in cells
-DEFAULT_CELL_SIZE: int = 5                          # Cell size in pixels
+DEFAULT_WIDTH: int = 600                            # Grid width in cells
+DEFAULT_HEIGHT: int = 300                           # Grid height in cells
+DEFAULT_CELL_SIZE: int = 2                          # Cell size in pixels
 DEFAULT_FPS: int = 5                                # Default frames per second
 
 # ============================================================================

@@ -20,6 +20,10 @@ class FireModel(Model):
         super().__init__()
 
         self.grid = SingleGrid(width, height, torus=False)
+        
+        # Track burning cells for performance optimization
+        self.burning_cells = set()
+        
         self.terrain = terrain
         
         if self.terrain:
@@ -169,6 +173,7 @@ class FireModel(Model):
             center_cell.state = CellState.Burning
             center_cell.next_state = CellState.Burning
             center_cell.burn_timer = int(center_cell.fuel.burn_time)
+            self.burning_cells.add((x_start, y_start))
         else:
             # Find nearest burnable cell using BFS
             fire_cell = self._find_nearest_burnable(initial_fire_pos)
@@ -176,6 +181,7 @@ class FireModel(Model):
                 fire_cell.state = CellState.Burning
                 fire_cell.next_state = CellState.Burning
                 fire_cell.burn_timer = int(fire_cell.fuel.burn_time)
+                self.burning_cells.add(fire_cell.pos)
                 print(f"Warning: Initial position {initial_fire_pos} is not burnable. "
                       f"Igniting nearest burnable cell at {fire_cell.pos} instead.")
             else:
@@ -247,39 +253,47 @@ class FireModel(Model):
         self._prepare_ignite_probabilities()
 
         # Phase 1: Calculate next states
-        for agent in self.agents.shuffle():
+        for agent in self.agents: #before for agent in self.agents.shuffle(): change to increase model speed
             agent.step()
         
         # Phase 2: Apply next states
-        for agent in self.agents.shuffle():
+        for agent in self.agents: #before for agent in self.agents.shuffle(): change to increase model speed
             agent.advance()
-        self.__str__()
+        #self.__str__() # Debug print current model state slows down the model a lot
     
     def _prepare_ignite_probabilities(self) -> None:
         """Compute ignition probabilities for the current step."""
-        # Resetting ignite_prob for next step
+        # Reset all probabilities from previous step (maintains original logic)
         for key in self.ignite_prob:
             self.ignite_prob[key] = 0.0
+        
+        # Iterate only over burning cells (performance optimization)
+        for burning_pos in list(self.burning_cells):  # list() because set may change during iteration
+            burning_cell = self.grid[burning_pos[0]][burning_pos[1]]
+            
+            # Skip cells that are no longer burning (they will be removed in advance())
+            if burning_cell.state != CellState.Burning:
+                continue
+            
+            x, y = burning_pos
+            neighbours = self.grid.get_neighbors(burning_pos, moore=True, include_center=False)
+            
+            for neighbour in neighbours:
+                if isinstance(neighbour, ForestCell) and neighbour.is_burnable():
+                    # Calculate p_burn using formula from article:
+                    # p_burn = p0 * (1 + p_veg) * (1 + p_dens) * pw
+                    p_veg = neighbour.fuel.p_veg
+                    p_dens = neighbour.fuel.p_dens
+                    p_w = self.calculate_wind_ignition_prob(burning_pos, neighbour.pos)
+                    p_burn = self.p0 * (1.0 + p_veg) * (1.0 + p_dens) * p_w * self.drought_multiplier
+                    p_burn = max(0.0, min(1.0, p_burn))
 
-        for agent in self.agents:
-            if isinstance(agent, ForestCell) and agent.state == CellState.Burning:
-                x,y = agent.pos
-                neighbours = self.grid.get_neighbors(agent.pos, moore=True, include_center=False)
-                for neighbour in neighbours:
-                    if isinstance(neighbour, ForestCell) and neighbour.is_burnable():                       
-                        # Calculate p_burn using formula from article:
-                        # p_burn = p0 * (1 + p_veg) * (1 + p_dens) * pw
-                        p_veg = neighbour.fuel.p_veg
-                        p_dens = neighbour.fuel.p_dens
-                        p_w = self.calculate_wind_ignition_prob(agent.pos, neighbour.pos)
-                        p_burn = self.p0 * (1.0 + p_veg) * (1.0 + p_dens) * p_w * self.drought_multiplier
-                        p_burn = max(0.0, min(1.0, p_burn))
-
-                        # Combine with previous probability using independent sources formula
-                        prev_prob = self.ignite_prob.get(neighbour.pos, 0.0)
-                        next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - p_burn)
-                        self.ignite_prob[neighbour.pos] = max(0.0, min(1.0, next_prob))
-                self.apply_spark_probability(x,y)
+                    # Combine with previous probability using independent sources formula
+                    prev_prob = self.ignite_prob.get(neighbour.pos, 0.0)
+                    next_prob = 1.0 - (1.0 - prev_prob) * (1.0 - p_burn)
+                    self.ignite_prob[neighbour.pos] = max(0.0, min(1.0, next_prob))
+            
+            self.apply_spark_probability(x, y)
 
 
     def update_wind(self):
@@ -355,7 +369,13 @@ class FireModel(Model):
         else:
             dy = 0
         return (dx, dy)
-    def apply_spark_probability(self, x: int, y: int) -> None:
+    def apply_spark_probability(self, x: int, y: int, affected_cells: set = None) -> None:
+        """Apply spark ignition probability to cells 2 steps away in wind direction.
+        
+        Args:
+            x, y: Position of burning cell
+            affected_cells: Deprecated parameter, kept for compatibility
+        """
         gust = float(self.wind.get('gust', 0.0))
 
         # za słaby poryw → brak iskier
@@ -368,7 +388,7 @@ class FireModel(Model):
 
         far_x = x + 2 * dx
         far_y = y + 2 * dy
-        print(f"Iskraaa z ({x},{y}) -> ({far_x},{far_y})")
+        #print(f"Iskraaa z ({x},{y}) -> ({far_x},{far_y})") debug print slows model
 
         # jeśli poza planszą → nic nie robimy
         if not (0 <= far_x < self.grid.width and 0 <= far_y < self.grid.height):
