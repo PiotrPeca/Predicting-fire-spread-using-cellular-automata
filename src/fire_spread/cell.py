@@ -1,7 +1,7 @@
 """Forest cell agent implementation for fire spread simulation."""
 
 from enum import Enum
-from typing import Tuple
+from typing import Tuple, Mapping
 
 from mesa import Agent
 
@@ -95,6 +95,20 @@ class FuelType:
         return (f"Fuel type: {self.name}, burn time: {self.burn_time}, "
                 f"veg_type: {self.veg_type.value}, veg_density: {self.veg_density.value}, "
                 f"p_veg: {self.p_veg}, p_dens: {self.p_dens}")
+
+
+def configure_fuel_prob_maps(
+    p_veg_values: Mapping[VegetationType, float] | None = None,
+    p_dens_values: Mapping[VegetationDensity, float] | None = None,
+) -> None:
+    """
+    Allow overriding global p_veg/p_dens maps used by FuelType from an external script.
+    Call before instantiating FuelType objects to ensure new values propagate.
+    """
+    if p_veg_values:
+        FuelType.P_VEG_VALUES.update(p_veg_values)
+    if p_dens_values:
+        FuelType.P_DENS_VALUES.update(p_dens_values)
 
 
 class ForestCell(Agent):

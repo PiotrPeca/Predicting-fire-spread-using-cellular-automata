@@ -4,7 +4,14 @@ from mesa import Model
 from mesa.space import SingleGrid
 import math
 
-from .cell import ForestCell, FuelType, CellState, VegetationType, VegetationDensity
+from .cell import (
+    ForestCell,
+    FuelType,
+    CellState,
+    VegetationType,
+    VegetationDensity,
+    configure_fuel_prob_maps,
+)
 from .wind_provider import WindProvider
 from .terrain import Terrain
 from collections import deque
@@ -16,8 +23,20 @@ from typing import Optional
 class FireModel(Model):
     """Main model for fire spread simulation using cellular automata."""
 
-    def __init__(self, width: int, height: int, wind_provider: WindProvider, initial_fire_pos: tuple[int, int] | None = None, terrain: Optional[Terrain] = None):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        wind_provider: WindProvider,
+        initial_fire_pos: tuple[int, int] | None = None,
+        terrain: Optional[Terrain] = None,
+        p_veg_override: dict[VegetationType, float] | None = None,
+        p_dens_override: dict[VegetationDensity, float] | None = None,
+    ):
         super().__init__()
+
+        # Allow external overrides of fuel probability modifiers before cells are created
+        configure_fuel_prob_maps(p_veg_override, p_dens_override)
 
         self.grid = SingleGrid(width, height, torus=False)
         
@@ -38,7 +57,7 @@ class FireModel(Model):
         self.ignite_prob: dict[tuple[int, int], float] = {}
         self.htc_schedule = {}  # Tu wpadnie harmonogram współczynników sielianowa
         self.drought_multiplier = 1.0
-        self.p0 = 0.09 #base_ignition_prob
+        self.p0 = 0.1 #base_ignition_prob
         self.spark_gust_threshold_kph = 40.0
         self.spark_ignition_prob = 0.1
         self.wind_parametr_c1 = 0.05
