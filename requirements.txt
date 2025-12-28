@@ -4,7 +4,7 @@ pygame
 requests
 rasterio
 numpy
+matplotlib>=3.7.0
 
 # Data analysis (optional, for future enhancements)
 # pandas>=2.0.0
-# matplotlib>=3.7.0
