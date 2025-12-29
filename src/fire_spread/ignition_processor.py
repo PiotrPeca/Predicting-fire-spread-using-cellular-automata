@@ -8,8 +8,13 @@ from rasterio import features
 from affine import Affine
 import matplotlib.pyplot as plt
 
-from terrain import Terrain
-from coordinates_transform import CoordinatesTransform
+# Support both package import (fire_spread.*) and direct script execution.
+try:
+    from .terrain import Terrain
+    from .coordinates_transform import CoordinatesTransform
+except ImportError:  # pragma: no cover
+    from terrain import Terrain
+    from coordinates_transform import CoordinatesTransform
 
 
 class IgnitionProcessor:

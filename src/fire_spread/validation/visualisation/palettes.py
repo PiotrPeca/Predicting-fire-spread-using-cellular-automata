@@ -15,24 +15,14 @@ class ColorSpec:
 
 
 @dataclass(frozen=True)
-class ErrorMapSpec:
-    """Defaults for time-difference error maps (sim_toa - real_toa)."""
-
-    cmap: str = "coolwarm"
-    vmin: float | None = None
-    vmax: float | None = None
-
-
-@dataclass(frozen=True)
 class TOASpec:
     """Defaults for Time-of-Arrival (TOA) heatmaps."""
 
-    # Paper-like TOA palette: yellow -> orange -> red
-    cmap: str = "YlOrRd"
+    # Matches colleague's reference style (IgnitionProcessor.plot_results)
+    cmap: str = "plasma_r"
     vmin: float | None = None
     vmax: float | None = None
 
 
 DEFAULT_COLORS = ColorSpec()
 DEFAULT_TOA = TOASpec()
-DEFAULT_ERROR = ErrorMapSpec()

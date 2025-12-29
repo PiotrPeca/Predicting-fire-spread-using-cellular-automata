@@ -12,6 +12,7 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from fire_spread.validation.visualisation import GridVisualizer
+from fire_spread.validation.visualisation.palettes import TOASpec
 
 
 # --- Simple config (edit these values if you want different outputs) ---
@@ -19,11 +20,9 @@ OUT_DIR = REPO_ROOT / "validation" / "_demo_outputs"
 GRID_H = 300
 GRID_W = 600
 SEED = 7
-T_MIN = 220.0
-BURN_DURATION_MIN = 60.0
 
-# Static validation indicators shown on the error map (easy to edit/extend).
-ERROR_METRICS: list[tuple[str, float]] = [("rmsd", 10.9), ("bias", -4.4)]
+# Static validation indicators (easy to edit/extend).
+METRICS: list[tuple[str, float]] = [("rmsd", 10.9), ("bias", -4.4)]
 
 
 def _majority_smooth(mask: np.ndarray, *, iterations: int = 6, threshold: int = 5) -> np.ndarray:
@@ -97,12 +96,6 @@ def _make_synthetic_toa(
     return dist * minutes_per_cell
 
 
-def _burning_mask_from_toa(toa: np.ndarray, *, t_min: float, burn_duration_min: float) -> np.ndarray:
-    """Return boolean mask for cells currently BURNING at time t_min."""
-
-    return (t_min >= toa) & (t_min < (toa + burn_duration_min))
-
-
 def main() -> int:
     out_dir = OUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -154,8 +147,10 @@ def main() -> int:
 
     sim_toa = np.where(reached, sim_toa, np.nan)
 
-    # Synthetic "terrain" background (grayscale): 0=water, 1=forest-ish.
-    # This imitates a landcover layer drawn behind the TOA heatmap.
+    # Apply the analysis mask: outside becomes NaN (transparent in plots).
+    real_toa = np.where(mask, real_toa, np.nan)
+    sim_toa = np.where(mask, sim_toa, np.nan)
+
     # Synthetic "terrain" background (grayscale): imitates landcover underlay.
     yy, xx = np.meshgrid(np.arange(GRID_H), np.arange(GRID_W), indexing="ij")
     background = 0.35 + 0.25 * (np.sin(xx / 18.0) * np.cos(yy / 22.0))
@@ -163,31 +158,26 @@ def main() -> int:
     # Darker outside the analysis region so the overlay pops.
     background = np.where(mask, background, background * 0.7)
 
-    # 3) Derive example "currently burning" masks from TOA.
-    real_burning = _burning_mask_from_toa(real_toa, t_min=T_MIN, burn_duration_min=BURN_DURATION_MIN) & mask
-    sim_burning = _burning_mask_from_toa(sim_toa, t_min=T_MIN, burn_duration_min=BURN_DURATION_MIN) & mask
-
     # 4) Visualise.
     viz = GridVisualizer(show_colorbar=True, origin="upper")
 
-    # A) TOA comparison (2 grids side-by-side)
-    if mask.any():
-        vmin = float(np.nanmin(real_toa[mask]))
-        vmax = float(np.nanmax(real_toa[mask]))
-    else:
-        vmin = float(np.nanmin(real_toa))
-        vmax = float(np.nanmax(real_toa))
+    # Keep the same value scale across all generated plots.
+    stacked = np.stack([real_toa, sim_toa])
+    finite = np.isfinite(stacked)
+    vmin = float(np.nanmin(stacked)) if np.any(finite) else None
+    vmax = float(np.nanmax(stacked)) if np.any(finite) else None
+    toa_spec = TOASpec(vmin=vmin, vmax=vmax)
 
-    fig_toa = viz.plot_two_grids(
+    # A) TOA comparison (2 grids side-by-side)
+    fig_toa = viz.plot_toa_compare(
         real_toa,
         sim_toa,
         background=background,
+        spec=toa_spec,
+        cbar_label="TOA (minutes from t0)",
+        metrics=METRICS,
         show_axes=True,
         tick_step=100,
-        cmap="YlOrRd",
-        vmin=vmin,
-        vmax=vmax,
-        cbar_label="TOA (minutes from t0)",
     )
     viz.save(fig_toa, str(out_dir / "toa_compare.png"))
 
@@ -196,7 +186,8 @@ def main() -> int:
         real_toa,
         title="TOA (Real)",
         background=background,
-        mask=mask,
+        spec=toa_spec,
+        cbar_label="TOA (minutes from t0)",
         show_axes=True,
         tick_step=100,
     )
@@ -206,39 +197,15 @@ def main() -> int:
         sim_toa,
         title="TOA (Sim)",
         background=background,
-        mask=mask,
+        spec=toa_spec,
+        cbar_label="TOA (minutes from t0)",
         show_axes=True,
         tick_step=100,
     )
     viz.save(ax_single_sim.figure, str(out_dir / "toa_single_sim.png"))
 
-    # B) Error map (sim - real), masked to analysis region (paper-like: background + axes)
-    fig_err = viz.plot_error_map(
-        sim_toa,
-        real_toa,
-        mask=mask,
-        background=background,
-        metrics=ERROR_METRICS,
-        show_axes=True,
-        tick_step=100,
-    )
-    viz.save(fig_err, str(out_dir / "error_map.png"))
-
-    # C) Burning masks comparison (boolean grids)
-    fig_burn = viz.plot_two_grids(
-        real_burning.astype(int),
-        sim_burning.astype(int),
-        background=background,
-        show_axes=True,
-        tick_step=100,
-        cmap="gray_r",
-        vmin=0,
-        vmax=1,
-    )
-    viz.save(fig_burn, str(out_dir / "burning_compare.png"))
-
     print(f"Saved demo images to: {out_dir.resolve()}")
-    print("Files: toa_compare.png, error_map.png, burning_compare.png")
+    print("Files: toa_compare.png, toa_single_real.png, toa_single_sim.png")
     return 0
 
 
