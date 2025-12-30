@@ -39,7 +39,7 @@ CONFIG: Dict[str, Any] = {
 	"steps_per_h": 1,         # simulation steps per meteo hour
 
 	# Model ignition / wind parameters
-	"p0": 0.9,
+	"p0": 0.1,
 	"wind_c1": 0.05,
 	"wind_c2": 0.1,
 	"spark_gust_threshold_kph": 40.0,
@@ -118,6 +118,9 @@ def run_once(run_id: int, cfg: Dict[str, Any]) -> None:
 	model.wind_parametr_c2 = cfg["wind_c2"]
 	model.spark_gust_threshold_kph = cfg["spark_gust_threshold_kph"]
 	model.spark_ignition_prob = cfg["spark_ignition_prob"]
+
+	# Print once at start to confirm applied params
+	model.print_parameters()
 
 	max_steps = cfg["max_steps"]
 	for step_idx in range(1, max_steps + 1):

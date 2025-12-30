@@ -453,3 +453,24 @@ class FireModel(Model):
         for pos, prob in sorted(self.ignite_prob.items()):
             if prob > 0:
                 print(f"  {pos}: {prob:.3f}")
+
+    def describe_parameters(self) -> str:
+        """Return a human-readable snapshot of the current model settings."""
+        wind_steps = getattr(self.wind_provider, "stemps_per_h", None)
+        parts = [
+            f"Grid: {self.grid.width} x {self.grid.height}",
+            f"Base ignition p0: {self.p0}",
+            f"Wind c1: {self.wind_parametr_c1}",
+            f"Wind c2: {self.wind_parametr_c2}",
+            f"Spark gust threshold [kph]: {self.spark_gust_threshold_kph}",
+            f"Spark ignition prob: {self.spark_ignition_prob}",
+            f"Terrain: {'enabled' if self.terrain else 'disabled'}",
+            f"Wind provider lat/lon: {getattr(self.wind_provider, 'lat', 'n/a')}, {getattr(self.wind_provider, 'lon', 'n/a')}",
+            f"Wind steps per hour: {wind_steps if wind_steps is not None else 'n/a'}",
+        ]
+        return "\n".join(parts)
+
+    def print_parameters(self) -> None:
+        """Print model parameters for quick validation in headless runs."""
+        print("=== FireModel parameters ===")
+        print(self.describe_parameters())
