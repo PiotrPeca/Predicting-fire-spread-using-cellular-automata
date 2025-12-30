@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import NDArray
 import pandas as pd
 import geopandas as gpd
 import json
@@ -84,7 +85,12 @@ class IgnitionProcessor:
         )
         return self.mask
 
-    def interpolate_ignition_time(self, method='linear'):
+    def interpolate_ignition_time(self, method='linear') -> NDArray:
+        """
+        :param method: Interpolation method for scipy.interpolate.griddata
+        :return: 2D Array of ignition time from previously set time
+        :rtype: NDArray
+        """
         if self.df is None or self.mask is None:
             raise ValueError("Data must be loaded and mask must be created first")
 
@@ -131,6 +137,7 @@ if __name__ == "__main__":
     MASK_PATH = ROOT_PATH / 'data' / '1a6cd4865f484fb48f8ba4ea97a6e0d1.json'
     ip.create_boundary_mask(str(MASK_PATH))
     grid = ip.interpolate_ignition_time()
+    print(f'The grid shape is: {grid.shape}')
     plt.imshow(grid)
     plt.show()
     # ip.plot_results(show_points=False)

@@ -182,7 +182,7 @@ class SimulationRunner:
         try:
             return Terrain(
                 tiff_path=str(terrain_path),
-                target_size=(height, width),
+                target_size=(width, height),
                 meters_per_pixel=40,
             )
         except Exception as exc:
@@ -227,6 +227,8 @@ class SimulationRunner:
             )
             if not is_burning:
                 self.paused = True
+
+        print(self.model.ignition_time_grid)
     
     def _render(self) -> None:
         """Render all visual components to the screen."""
