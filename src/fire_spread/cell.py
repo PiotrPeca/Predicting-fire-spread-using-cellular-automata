@@ -65,6 +65,7 @@ class FuelType:
         VegetationDensity.ROAD_TERTIARY: -0.4,
     }
 
+
     def __init__(
         self, 
         name: str, 
@@ -95,6 +96,107 @@ class FuelType:
         return (f"Fuel type: {self.name}, burn time: {self.burn_time}, "
                 f"veg_type: {self.veg_type.value}, veg_density: {self.veg_density.value}, "
                 f"p_veg: {self.p_veg}, p_dens: {self.p_dens}")
+    
+FUEL_TYPES = {
+            # Cultivated vegetation with different densities
+            "cultivated_sparse": FuelType(
+                name="cultivated_sparse",
+                burn_time=6,
+                color="lightyellow",
+                veg_type=VegetationType.CULTIVATED,
+                veg_density=VegetationDensity.SPARSE
+            ),
+            "cultivated_normal": FuelType(
+                name="cultivated_normal",
+                burn_time=8,
+                color="yellow",
+                veg_type=VegetationType.CULTIVATED,
+                veg_density=VegetationDensity.NORMAL
+            ),
+            "cultivated_dense": FuelType(
+                name="cultivated_dense",
+                burn_time=10,
+                color="gold",
+                veg_type=VegetationType.CULTIVATED,
+                veg_density=VegetationDensity.DENSE
+            ),
+            
+            # Forest vegetation with different densities
+            "forest_sparse": FuelType(
+                name="forest_sparse",
+                burn_time=12,
+                color="lightgreen",
+                veg_type=VegetationType.FORESTS,
+                veg_density=VegetationDensity.SPARSE
+            ),
+            "forest_normal": FuelType(
+                name="forest_normal",
+                burn_time=15,
+                color="green",
+                veg_type=VegetationType.FORESTS,
+                veg_density=VegetationDensity.NORMAL
+            ),
+            "forest_dense": FuelType(
+                name="forest_dense",
+                burn_time=18,
+                color="darkgreen",
+                veg_type=VegetationType.FORESTS,
+                veg_density=VegetationDensity.DENSE
+            ),
+            
+            # Shrub vegetation with different densities
+            "shrub_sparse": FuelType(
+                name="shrub_sparse",
+                burn_time=8,
+                color="lightseagreen",
+                veg_type=VegetationType.SHRUB,
+                veg_density=VegetationDensity.SPARSE
+            ),
+            "shrub_normal": FuelType(
+                name="shrub_normal",
+                burn_time=10,
+                color="seagreen",
+                veg_type=VegetationType.SHRUB,
+                veg_density=VegetationDensity.NORMAL
+            ),
+            "shrub_dense": FuelType(
+                name="shrub_dense",
+                burn_time=12,
+                color="darkseagreen",
+                veg_type=VegetationType.SHRUB,
+                veg_density=VegetationDensity.DENSE
+            ),
+            
+            # Non-burnable types (barriers)
+            "water": FuelType(
+                name="water",
+                burn_time=0,
+                color="blue",
+                veg_type=VegetationType.WATER,
+                veg_density=VegetationDensity.WATER
+            ),
+            "road_primary": FuelType(
+                name="road_primary",
+                burn_time=0,
+                color="gray",
+                veg_type=VegetationType.ROAD_PRIMARY,
+                veg_density=VegetationDensity.ROAD_PRIMARY
+            ),
+            "road_secondary": FuelType(
+                name="road_secondary",
+                burn_time=0,
+                color="lightgray",
+                veg_type=VegetationType.ROAD_SECONDARY,
+                veg_density=VegetationDensity.ROAD_SECONDARY
+            ),
+            "road_tertiary": FuelType(
+                name="road_tertiary",
+                burn_time=0,
+                color="silver",
+                veg_type=VegetationType.ROAD_TERTIARY,
+                veg_density=VegetationDensity.ROAD_TERTIARY
+            ),
+        }
 
 
 def configure_fuel_prob_maps(
@@ -196,6 +298,12 @@ class ForestCell(Agent):
             # Cell started burning - add to tracking and reset burn timer
             self.burn_timer = int(self.fuel.burn_time)
             self.model.burning_cells.add(self.pos)
+
+            current_ts = self.model.wind.get('timestamp')
+            if current_ts is not None:
+                x, y = self.pos
+                self.model.ignition_time_grid[y, x] = current_ts
+
         elif prev_state == CellState.Burning and self.state != CellState.Burning:
             # Cell stopped burning - remove from tracking
             self.model.burning_cells.discard(self.pos)
