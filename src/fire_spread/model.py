@@ -3,10 +3,12 @@
 from mesa import Model
 from mesa.space import SingleGrid
 import math
+import numpy as np
 
 from .cell import (
     ForestCell,
     FuelType,
+    FUEL_TYPES,
     CellState,
     VegetationType,
     VegetationDensity,
@@ -17,8 +19,6 @@ from .terrain import Terrain
 from collections import deque
 from datetime import datetime
 from typing import Optional
-
-
 
 class FireModel(Model):
     """Main model for fire spread simulation using cellular automata."""
@@ -50,10 +50,12 @@ class FireModel(Model):
             if (terrain_width, terrain_height) != (width, height):
                 raise ValueError(
                     "Terrain dimensions do not match provided grid size. "
-                    "Create the Terrain with target_size=(height, width) before passing it to FireModel."
+                    "Create the Terrain with target_size=(width, height) before passing it to FireModel."
                 )
         self.wind_provider = wind_provider
         self.wind: dict
+        self.update_wind()
+
         self.ignite_prob: dict[tuple[int, int], float] = {}
         self.htc_schedule = {}  # Tu wpadnie harmonogram współczynników sielianowa
         self.drought_multiplier = 1.0
@@ -62,113 +64,15 @@ class FireModel(Model):
         self.spark_ignition_prob = 0.1
         self.wind_parametr_c1 = 0.05
         self.wind_parametr_c2 = 0.1
+        self.ignition_time_grid = np.full((height, width), np.nan)
         
         # Define fuel types
-        self.fuel_types = {
-            # Cultivated vegetation with different densities
-            "cultivated_sparse": FuelType(
-                name="cultivated_sparse",
-                burn_time=6,
-                color="lightyellow",
-                veg_type=VegetationType.CULTIVATED,
-                veg_density=VegetationDensity.SPARSE
-            ),
-            "cultivated_normal": FuelType(
-                name="cultivated_normal",
-                burn_time=8,
-                color="yellow",
-                veg_type=VegetationType.CULTIVATED,
-                veg_density=VegetationDensity.NORMAL
-            ),
-            "cultivated_dense": FuelType(
-                name="cultivated_dense",
-                burn_time=10,
-                color="gold",
-                veg_type=VegetationType.CULTIVATED,
-                veg_density=VegetationDensity.DENSE
-            ),
-            
-            # Forest vegetation with different densities
-            "forest_sparse": FuelType(
-                name="forest_sparse",
-                burn_time=12,
-                color="lightgreen",
-                veg_type=VegetationType.FORESTS,
-                veg_density=VegetationDensity.SPARSE
-            ),
-            "forest_normal": FuelType(
-                name="forest_normal",
-                burn_time=15,
-                color="green",
-                veg_type=VegetationType.FORESTS,
-                veg_density=VegetationDensity.NORMAL
-            ),
-            "forest_dense": FuelType(
-                name="forest_dense",
-                burn_time=18,
-                color="darkgreen",
-                veg_type=VegetationType.FORESTS,
-                veg_density=VegetationDensity.DENSE
-            ),
-            
-            # Shrub vegetation with different densities
-            "shrub_sparse": FuelType(
-                name="shrub_sparse",
-                burn_time=8,
-                color="lightseagreen",
-                veg_type=VegetationType.SHRUB,
-                veg_density=VegetationDensity.SPARSE
-            ),
-            "shrub_normal": FuelType(
-                name="shrub_normal",
-                burn_time=10,
-                color="seagreen",
-                veg_type=VegetationType.SHRUB,
-                veg_density=VegetationDensity.NORMAL
-            ),
-            "shrub_dense": FuelType(
-                name="shrub_dense",
-                burn_time=12,
-                color="darkseagreen",
-                veg_type=VegetationType.SHRUB,
-                veg_density=VegetationDensity.DENSE
-            ),
-            
-            # Non-burnable types (barriers)
-            "water": FuelType(
-                name="water",
-                burn_time=0,
-                color="blue",
-                veg_type=VegetationType.WATER,
-                veg_density=VegetationDensity.WATER
-            ),
-            "road_primary": FuelType(
-                name="road_primary",
-                burn_time=0,
-                color="gray",
-                veg_type=VegetationType.ROAD_PRIMARY,
-                veg_density=VegetationDensity.ROAD_PRIMARY
-            ),
-            "road_secondary": FuelType(
-                name="road_secondary",
-                burn_time=0,
-                color="lightgray",
-                veg_type=VegetationType.ROAD_SECONDARY,
-                veg_density=VegetationDensity.ROAD_SECONDARY
-            ),
-            "road_tertiary": FuelType(
-                name="road_tertiary",
-                burn_time=0,
-                color="silver",
-                veg_type=VegetationType.ROAD_TERTIARY,
-                veg_density=VegetationDensity.ROAD_TERTIARY
-            ),
-        }
-
+        self.fuel_types = FUEL_TYPES
+        terrain_grid = self.terrain.get_grid() if self.terrain else None
 
         for content, (x, y) in self.grid.coord_iter():
-            if self.terrain:
-                terrain_cell = self.terrain.get_grid()[y, x]
+            if terrain_grid is not None:
+                terrain_cell = terrain_grid[y, x]
                 fuel_type_key = terrain_cell["fuel_type"]
                 fuel = self.fuel_types.get(fuel_type_key, self.fuel_types["water"])
             else:
@@ -188,11 +92,15 @@ class FireModel(Model):
         x_start, y_start = initial_fire_pos
         center_cell = self.grid[x_start][y_start]
 
+        current_ts = self.wind.get('timestamp', 0)
+
         if center_cell.is_burnable():
             center_cell.state = CellState.Burning
             center_cell.next_state = CellState.Burning
             center_cell.burn_timer = int(center_cell.fuel.burn_time)
             self.burning_cells.add((x_start, y_start))
+
+            self.ignition_time_grid[y_start, x_start] = current_ts
         else:
             # Find nearest burnable cell using BFS
             fire_cell = self._find_nearest_burnable(initial_fire_pos)
@@ -201,6 +109,10 @@ class FireModel(Model):
                 fire_cell.next_state = CellState.Burning
                 fire_cell.burn_timer = int(fire_cell.fuel.burn_time)
                 self.burning_cells.add(fire_cell.pos)
+
+                fx, fy = fire_cell.pos
+                self.ignition_time_grid[fy, fx] = current_ts
+
                 print(f"Warning: Initial position {initial_fire_pos} is not burnable. "
                       f"Igniting nearest burnable cell at {fire_cell.pos} instead.")
             else:
@@ -388,6 +300,7 @@ class FireModel(Model):
         else:
             dy = 0
         return (dx, dy)
+    
     def apply_spark_probability(self, x: int, y: int, affected_cells: set = None) -> None:
         """Apply spark ignition probability to cells 2 steps away in wind direction.
         
