@@ -86,7 +86,7 @@ def _build_real_toa(*, target_size: tuple[int, int]) -> tuple[np.ndarray, np.nda
     ip.load_and_prepare_data(
         str(FIRE_DATA_PATH),
         bbox=(0, 0, w - 1, h - 1),
-        timedelta=TIMEDELTA,
+        #timedelta=TIMEDELTA,
     )
     ip.create_boundary_mask(str(BOUNDARY_PATH))
     real_toa = ip.interpolate_ignition_time(method="linear")
