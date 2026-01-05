@@ -50,6 +50,19 @@ with _silence_stdio(_QUIET):
 	from fire_spread.validation.visualisation.grid_viz import GridTitles, GridVisualizer
 
 
+class InvertedWindProvider(WindProvider):
+	"""WindProvider that flips wind direction across E-W axis (for inverted Y terrain)."""
+	def get_next_wind(self) -> dict | None:
+		wind = super().get_next_wind()
+		if wind:
+			w = wind.copy()
+			wd = w.get('windDir', 0)
+			# Reflect across E-W axis: 0->180, 90->90
+			w['windDir'] = (180 - wd) % 360
+			return w
+		return None
+
+
 # ---- User-configurable parameters (minimal surface for validation) ----
 CONFIG: Dict[str, Any] = {
 	# Grid
@@ -106,6 +119,8 @@ CONFIG: Dict[str, Any] = {
 	"save_run_outputs": True,
 	"outputs_root": REPO_ROOT / "outputs",
 	"outputs_crop_pad_px": 12,
+	# Plot orientation. Use "lower" if maps appear flipped vertically.
+	"viz_origin": "upper",
 
 	# If the real-fire boundary mask touches grid edges, the GeoTIFF crop is too small.
 	# Auto-expand the simulation/terrain grid to avoid clipping the burned area.
@@ -201,7 +216,10 @@ def _save_run_outputs(
 	if bg_c is not None:
 		bg_c = _normalize_background(bg_c)
 
-	viz = GridVisualizer(show_colorbar=True, origin="upper")
+	origin = str(cfg.get("viz_origin") or "upper")
+	if origin not in {"upper", "lower"}:
+		origin = "upper"
+	viz = GridVisualizer(show_colorbar=True, origin=origin)
 
 	fig_toa = viz.plot_toa_compare(
 		real_c,
@@ -340,7 +358,7 @@ def _print_grid(label: str, grid: np.ndarray | None) -> None:
 
 def build_wind_provider(cfg: Dict[str, Any]) -> WindProvider:
 	"""Create provider; caller is responsible for fetch_data and drought map."""
-	return WindProvider(
+	return InvertedWindProvider(
 		lat=cfg["lat"],
 		lon=cfg["lon"],
 		steps_per_h=cfg["steps_per_h"],
@@ -350,12 +368,15 @@ def build_wind_provider(cfg: Dict[str, Any]) -> WindProvider:
 def build_terrain(cfg: Dict[str, Any]) -> Terrain | None:
 	if not cfg.get("use_terrain"):
 		return None
-	return Terrain(
+	t = Terrain(
 		tiff_path=cfg["terrain_path"],
 		# Terrain expects target_size as (width, height) (same as pygame_run.py)
 		target_size=(cfg["width"], cfg["height"]),
 		meters_per_pixel=cfg["meters_per_pixel"],
 	)
+	# Unflip the grid data to restore top-down orientation (fix for inverted terrain)
+	t.grid_data = np.flip(t.grid_data, axis=0)
+	return t
 
 
 def prepare_weather(cfg: Dict[str, Any]) -> tuple[WindProvider, dict[str, float]]:
