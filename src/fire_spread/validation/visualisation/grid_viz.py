@@ -327,29 +327,29 @@ class GridVisualizer:
         self,
         error: Any,
         *,
-        title: str = "TOA error (Sim - Real)",
+        title: str = "TOA absolute error |Sim - Real|",
         background: Any | None = None,
         background_cmap: str = "gray",
         background_alpha: float = 0.40,
         overlay_alpha: float = 0.85,
-        cmap: str = "RdBu_r",
+        cmap: str = "RdYlGn_r",
         vlim: float | None = None,
         outline: bool = True,
         outline_mask: Any | None = None,
         outline_color: str = "black",
         outline_width: float = 1.2,
-        cbar_label: str = "Sim - Real (hours)",
+        cbar_label: str = "|Sim - Real| (hours)",
         show_axes: bool = True,
         tick_step: int = 100,
     ) -> Any:
-        """Plot an error map (typically sim_toa - real_toa) with a diverging colorbar.
+        """Plot an absolute error map (typically |sim_toa - real_toa|).
 
         - NaNs are transparent.
-        - If vlim is None, uses a symmetric range around 0 based on max(|error|).
+        - If vlim is None, uses [0, max(abs(error))] over finite pixels.
         - If outline is True, outlines `outline_mask` if provided, otherwise finite error.
         """
 
-        err2d = as_2d_numpy_grid(error, name="error").astype(float)
+        err2d = np.abs(as_2d_numpy_grid(error, name="error").astype(float))
 
         bg2d: np.ndarray | None = None
         if background is not None:
@@ -368,10 +368,10 @@ class GridVisualizer:
         if vlim is None:
             finite = np.isfinite(err2d)
             if np.any(finite):
-                vlim = float(np.nanmax(np.abs(err2d[finite])))
+                vlim = float(np.nanmax(err2d[finite]))
             else:
                 vlim = 1.0
-        vmin, vmax = -float(vlim), float(vlim)
+        vmin, vmax = 0.0, float(vlim)
 
         im = ax.imshow(
             err2d,

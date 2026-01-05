@@ -44,7 +44,7 @@ def _silence_stdio(enabled: bool):
 
 # Mesa may print optional viz warnings on import; silence them in quiet mode.
 with _silence_stdio(_QUIET):
-	from fire_spread import FireModel, VegetationType, VegetationDensity, WindProvider
+	from fire_spread import FireModel, VegetationType, VegetationDensity, WindProvider, CellState
 	from fire_spread.terrain import Terrain
 	from fire_spread.validation.metrics import toa_error_metrics
 	from fire_spread.validation.visualisation.grid_viz import GridTitles, GridVisualizer
@@ -68,7 +68,10 @@ CONFIG: Dict[str, Any] = {
 	# Grid
 	"width": 600,
 	"height": 300,
-	"initial_fire_pos": None,  # (x, y) or None for center
+	"initial_fire_pos": None,  # (x, y) or None; if None and seed_from_real_mask=True, seeds are auto-picked
+	"seed_from_real_mask": True,
+	"seed_points": 3,
+	"align_sim_start_to_real_t0": True,
 
 	# Weather / wind
 	"lat": 61.62453,
@@ -79,7 +82,7 @@ CONFIG: Dict[str, Any] = {
 	"steps_per_h": 1,         # simulation steps per meteo hour
 
 	# Model ignition / wind parameters
-	"p0": 0.15,
+	"p0": 0.1,
 	"wind_c1": 0.045,
 	"wind_c2": 0.1,
 	"spark_gust_threshold_kph": 40.0,
@@ -128,6 +131,103 @@ CONFIG: Dict[str, Any] = {
 	"expand_factor": 1.6,
 	"expand_attempts": 3,
 }
+
+
+def _pick_seed_points_from_mask(
+	mask: np.ndarray,
+	*,
+	real_grid: np.ndarray | None = None,
+	max_points: int = 3,
+) -> list[tuple[int, int]]:
+	"""Pick up to max_points seed positions, one per connected component in mask.
+
+	Heuristic:
+	- Find connected components (4-neighborhood) in the boundary mask.
+	- For each component:
+		- If real_grid is provided and has finite values inside the component, pick the earliest ignition cell.
+		- Otherwise pick the component centroid (rounded).
+	- Return seeds from the largest components first.
+	"""
+	m = np.asarray(mask, dtype=bool)
+	if m.ndim != 2 or not np.any(m):
+		return []
+	use_real = real_grid is not None and isinstance(real_grid, np.ndarray) and real_grid.shape == m.shape
+	rg = real_grid if use_real else None
+
+	h, w = m.shape
+	visited = np.zeros((h, w), dtype=bool)
+	components: list[dict[str, Any]] = []
+
+	# Iterate only on True pixels.
+	true_ys, true_xs = np.where(m)
+	for y0, x0 in zip(true_ys.tolist(), true_xs.tolist()):
+		if visited[y0, x0]:
+			continue
+		# BFS/DFS for the component.
+		stack = [(y0, x0)]
+		visited[y0, x0] = True
+		size = 0
+		sum_x = 0
+		sum_y = 0
+		best_t = float("inf")
+		best_pos: tuple[int, int] | None = None
+		while stack:
+			y, x = stack.pop()
+			size += 1
+			sum_x += x
+			sum_y += y
+			if rg is not None:
+				t = float(rg[y, x])
+				if np.isfinite(t) and t < best_t:
+					best_t = t
+					best_pos = (x, y)
+			# 4-neighborhood
+			if y > 0 and m[y - 1, x] and not visited[y - 1, x]:
+				visited[y - 1, x] = True
+				stack.append((y - 1, x))
+			if y + 1 < h and m[y + 1, x] and not visited[y + 1, x]:
+				visited[y + 1, x] = True
+				stack.append((y + 1, x))
+			if x > 0 and m[y, x - 1] and not visited[y, x - 1]:
+				visited[y, x - 1] = True
+				stack.append((y, x - 1))
+			if x + 1 < w and m[y, x + 1] and not visited[y, x + 1]:
+				visited[y, x + 1] = True
+				stack.append((y, x + 1))
+
+		centroid = (int(round(sum_x / max(size, 1))), int(round(sum_y / max(size, 1))))
+		seed = best_pos if best_pos is not None else centroid
+		components.append({"size": size, "seed": seed})
+
+	components.sort(key=lambda c: int(c["size"]), reverse=True)
+	return [tuple(c["seed"]) for c in components[: max(0, int(max_points))]]
+
+
+def _ignite_seed(model: FireModel, seed_pos: tuple[int, int]) -> tuple[int, int] | None:
+	"""Ignite a single seed position, falling back to nearest burnable if needed."""
+	x, y = seed_pos
+	if not (0 <= x < model.grid.width and 0 <= y < model.grid.height):
+		return None
+	cell = model.grid[x][y]
+	current_ts = model.wind.get("timestamp", 0)
+	if getattr(cell, "is_burnable", None) and cell.is_burnable():
+		cell.state = CellState.Burning
+		cell.next_state = CellState.Burning
+		cell.burn_timer = int(cell.fuel.burn_time)
+		model.burning_cells.add((x, y))
+		model.ignition_time_grid[y, x] = current_ts
+		return (x, y)
+	# Fallback: nearest burnable
+	fire_cell = model._find_nearest_burnable((x, y))
+	if fire_cell is None:
+		return None
+	fire_cell.state = CellState.Burning
+	fire_cell.next_state = CellState.Burning
+	fire_cell.burn_timer = int(fire_cell.fuel.burn_time)
+	model.burning_cells.add(fire_cell.pos)
+	fx, fy = fire_cell.pos
+	model.ignition_time_grid[fy, fx] = current_ts
+	return (fx, fy)
 
 
 def _terrain_biomass_background(terrain: Terrain | None) -> np.ndarray | None:
@@ -237,7 +337,7 @@ def _save_run_outputs(
 	fig_err = viz.plot_error_map(
 		err,
 		background=bg_c,
-		cbar_label="Sim - Real (hours)",
+		cbar_label="|Sim - Real| (hours)",
 		outline=True,
 		outline_mask=mask_c,
 		show_axes=True,
@@ -396,8 +496,6 @@ def prepare_weather(cfg: Dict[str, Any]) -> tuple[WindProvider, dict[str, float]
 
 
 def run_once(run_id: int, cfg: Dict[str, Any], *, session_ts: str) -> None:
-	wind, htc_schedule = prepare_weather(cfg)
-
 	# Auto-expand grid/terrain if the boundary mask looks clipped.
 	run_cfg: Dict[str, Any] = dict(cfg)
 	terrain = None
@@ -419,11 +517,59 @@ def run_once(run_id: int, cfg: Dict[str, Any], *, session_ts: str) -> None:
 		run_cfg["width"] = int(run_cfg["width"] * factor)
 		run_cfg["height"] = int(run_cfg["height"] * factor)
 
+	# Pre-load/compute real ignition grid BEFORE simulation so we can align start time and seed points.
+	real_grid = _load_real_ignition_grid(run_cfg)
+	if real_grid is None:
+		real_grid, computed_mask = _compute_real_ignition_grid(run_cfg, terrain)
+		if real_mask is None:
+			real_mask = computed_mask
+
+	if real_mask is None:
+		raise ValueError(
+			"Brak real_boundary_mask_path/real_mask: nie da się dobrać punktów startowych i wykonać walidacji. "
+			"Ustaw real_boundary_mask_path albo podaj real_ignition_grid_path + maskę granicy."
+		)
+
+	domain_mask = np.asarray(real_mask, dtype=bool)
+
+	# Choose time-zero as the earliest REAL ignition inside the domain.
+	default_t0 = float(run_cfg["from_date"].timestamp())
+	t0_unix = default_t0
+	if real_grid is not None:
+		finite = domain_mask & np.isfinite(real_grid)
+		if np.any(finite):
+			t0_unix = float(np.nanmin(real_grid[finite]))
+
+	# Optionally align simulation start (wind timestamps) to real t0
+	if bool(run_cfg.get("align_sim_start_to_real_t0", True)) and np.isfinite(t0_unix):
+		old_from = run_cfg["from_date"]
+		old_to = run_cfg["to_date"]
+		duration = old_to - old_from
+		run_cfg["from_date"] = datetime.fromtimestamp(t0_unix)
+		run_cfg["to_date"] = run_cfg["from_date"] + duration
+
+	# Now prepare weather with the (possibly) adjusted start date.
+	wind, htc_schedule = prepare_weather(run_cfg)
+
+	# Pick 3 seed points from the real burned mask components (one per fragment).
+	seed_points: list[tuple[int, int]] = []
+	if bool(run_cfg.get("seed_from_real_mask", True)) and domain_mask is not None:
+		seed_points = _pick_seed_points_from_mask(
+			domain_mask,
+			real_grid=real_grid,
+			max_points=int(run_cfg.get("seed_points", 3) or 3),
+		)
+
+	# Decide primary initial seed
+	initial_fire_pos = run_cfg.get("initial_fire_pos")
+	if initial_fire_pos is None and seed_points:
+		initial_fire_pos = seed_points[0]
+
 	model = FireModel(
 		width=run_cfg["width"],
 		height=run_cfg["height"],
 		wind_provider=wind,
-		initial_fire_pos=run_cfg["initial_fire_pos"],
+		initial_fire_pos=initial_fire_pos,
 		terrain=terrain,
 		p_veg_override=run_cfg.get("p_veg_override"),
 		p_dens_override=run_cfg.get("p_dens_override"),
@@ -439,6 +585,12 @@ def run_once(run_id: int, cfg: Dict[str, Any], *, session_ts: str) -> None:
 	model.spark_gust_threshold_kph = run_cfg["spark_gust_threshold_kph"]
 	model.spark_ignition_prob = run_cfg["spark_ignition_prob"]
 
+	# Ignite additional seed points (if any) so each real fragment can start burning.
+	# FireModel already ignited the primary seed in __init__.
+	if seed_points:
+		for extra_seed in seed_points[1:]:
+			_ignite_seed(model, extra_seed)
+
 	# Print once at start to confirm applied params
 	model.print_parameters()
 
@@ -449,33 +601,11 @@ def run_once(run_id: int, cfg: Dict[str, Any], *, session_ts: str) -> None:
 		if not model.burning_cells:
 			break
 
-	# Po zakończeniu symulacji: wczytaj/wylicz real TOA (Unix seconds)
-	real_grid = _load_real_ignition_grid(run_cfg)
-	if real_grid is None:
-		real_grid, computed_mask = _compute_real_ignition_grid(run_cfg, terrain)
-		if real_mask is None:
-			real_mask = computed_mask
-
 	sim_grid = model.ignition_time_grid
 
 	# --- Walidacja (symulacja ograniczona) ---
 	# Analizujemy WYŁĄCZNIE komórki spalone w rzeczywistości.
 	# Definicja "spalone w real" pochodzi z maski granicy pożaru (GeoJSON), a nie z TOA.
-	if real_mask is None:
-		raise ValueError(
-			"Brak real_boundary_mask_path/real_mask: nie da się wykonać walidacji w trybie 'symulacji ograniczonej' (tylko komórki spalone w real)."
-		)
-
-	domain_mask = np.asarray(real_mask, dtype=bool)
-
-	# Choose time-zero as the earliest REAL ignition inside the domain.
-	# This makes Real TOA start at 0h (so you will see the yellow early-ignition areas).
-	default_t0 = float(run_cfg["from_date"].timestamp())
-	t0_unix = default_t0
-	if real_grid is not None:
-		finite = domain_mask & np.isfinite(real_grid)
-		if np.any(finite):
-			t0_unix = float(np.nanmin(real_grid[finite]))
 
 	# Konwersja do godzin od t0
 	real_hours = _to_hours_from_start(real_grid, t0_unix)
