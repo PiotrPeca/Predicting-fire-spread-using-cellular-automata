@@ -90,6 +90,7 @@ class GridVisualizer:
         background_alpha: float = 0.40,
         overlay_alpha: float = 0.80,
         outline: bool = True,
+        outline_mask: Any | None = None,
         outline_color: str = "black",
         outline_width: float = 1.2,
         cbar_label: str = "Time since fire start (hours)",
@@ -104,7 +105,8 @@ class GridVisualizer:
         """Plot a single TOA map.
 
         - NaNs in TOA are treated as transparent (blank).
-        - If outline is True, draws a contour around the finite TOA region.
+                - If outline is True, draws a contour around the finite TOA region or
+                    around `outline_mask` if provided.
         """
 
         toa2d = as_2d_numpy_grid(toa, name="toa").astype(float)
@@ -137,9 +139,16 @@ class GridVisualizer:
         ax.set_title(title)
 
         if outline:
-            finite = np.isfinite(toa2d)
-            if np.any(finite):
-                ax.contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            if outline_mask is not None:
+                om = as_2d_numpy_grid(outline_mask, name="outline_mask").astype(bool)
+                if om.shape != toa2d.shape:
+                    raise ValueError(f"outline_mask shape must match TOA. Got {om.shape} vs {toa2d.shape}.")
+                if np.any(om):
+                    ax.contour(om.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            else:
+                finite = np.isfinite(toa2d)
+                if np.any(finite):
+                    ax.contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
 
         metrics_text = _format_metrics(metrics, value_format=metrics_value_format)
         if metrics_text:
@@ -183,6 +192,7 @@ class GridVisualizer:
         background_alpha: float = 0.40,
         overlay_alpha: float = 0.80,
         outline: bool = True,
+        outline_mask: Any | None = None,
         outline_color: str = "black",
         outline_width: float = 1.2,
         cbar_label: str = "Time since fire start (hours)",
@@ -207,6 +217,12 @@ class GridVisualizer:
             if bg2d.shape != left2d.shape:
                 raise ValueError(f"background shape must match TOA grids. Got {bg2d.shape} vs {left2d.shape}.")
 
+        outline2d: np.ndarray | None = None
+        if outline_mask is not None:
+            outline2d = as_2d_numpy_grid(outline_mask, name="outline_mask").astype(bool)
+            if outline2d.shape != left2d.shape:
+                raise ValueError(f"outline_mask shape must match TOA grids. Got {outline2d.shape} vs {left2d.shape}.")
+
         titles = titles or GridTitles()
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -230,9 +246,13 @@ class GridVisualizer:
         axes[0].set_title(titles.left)
 
         if outline:
-            finite = np.isfinite(left2d)
-            if np.any(finite):
-                axes[0].contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            if outline2d is not None:
+                if np.any(outline2d):
+                    axes[0].contour(outline2d.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            else:
+                finite = np.isfinite(left2d)
+                if np.any(finite):
+                    axes[0].contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
 
         if not show_axes:
             axes[0].set_xticks([])
@@ -257,9 +277,13 @@ class GridVisualizer:
         axes[1].set_title(titles.right)
 
         if outline:
-            finite = np.isfinite(right2d)
-            if np.any(finite):
-                axes[1].contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            if outline2d is not None:
+                if np.any(outline2d):
+                    axes[1].contour(outline2d.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            else:
+                finite = np.isfinite(right2d)
+                if np.any(finite):
+                    axes[1].contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
 
         metrics_text = _format_metrics(metrics, value_format=metrics_value_format)
         if metrics_text:
@@ -297,6 +321,94 @@ class GridVisualizer:
             fig.subplots_adjust(wspace=panel_wspace)
 
         # Return the figure for saving.
+        return fig
+
+    def plot_error_map(
+        self,
+        error: Any,
+        *,
+        title: str = "TOA error (Sim - Real)",
+        background: Any | None = None,
+        background_cmap: str = "gray",
+        background_alpha: float = 0.40,
+        overlay_alpha: float = 0.85,
+        cmap: str = "RdBu_r",
+        vlim: float | None = None,
+        outline: bool = True,
+        outline_mask: Any | None = None,
+        outline_color: str = "black",
+        outline_width: float = 1.2,
+        cbar_label: str = "Sim - Real (hours)",
+        show_axes: bool = True,
+        tick_step: int = 100,
+    ) -> Any:
+        """Plot an error map (typically sim_toa - real_toa) with a diverging colorbar.
+
+        - NaNs are transparent.
+        - If vlim is None, uses a symmetric range around 0 based on max(|error|).
+        - If outline is True, outlines `outline_mask` if provided, otherwise finite error.
+        """
+
+        err2d = as_2d_numpy_grid(error, name="error").astype(float)
+
+        bg2d: np.ndarray | None = None
+        if background is not None:
+            bg2d = as_2d_numpy_grid(background, name="background").astype(float)
+            if bg2d.shape != err2d.shape:
+                raise ValueError(f"background shape must match error. Got {bg2d.shape} vs {err2d.shape}.")
+
+        fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+
+        if bg2d is not None:
+            ax.imshow(bg2d, cmap=background_cmap, origin=self.origin, alpha=background_alpha)
+
+        cmap_obj = plt.get_cmap(cmap).copy()
+        cmap_obj.set_bad(alpha=0.0)
+
+        if vlim is None:
+            finite = np.isfinite(err2d)
+            if np.any(finite):
+                vlim = float(np.nanmax(np.abs(err2d[finite])))
+            else:
+                vlim = 1.0
+        vmin, vmax = -float(vlim), float(vlim)
+
+        im = ax.imshow(
+            err2d,
+            cmap=cmap_obj,
+            vmin=vmin,
+            vmax=vmax,
+            origin=self.origin,
+            alpha=overlay_alpha,
+        )
+        ax.set_title(title)
+
+        if outline:
+            if outline_mask is not None:
+                om = as_2d_numpy_grid(outline_mask, name="outline_mask").astype(bool)
+                if om.shape != err2d.shape:
+                    raise ValueError(f"outline_mask shape must match error. Got {om.shape} vs {err2d.shape}.")
+                if np.any(om):
+                    ax.contour(om.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+            else:
+                finite = np.isfinite(err2d)
+                if np.any(finite):
+                    ax.contour(finite.astype(float), levels=[0.5], colors=[outline_color], linewidths=outline_width)
+
+        if not show_axes:
+            ax.set_xticks([])
+            ax.set_yticks([])
+        else:
+            if tick_step > 0:
+                h, w = err2d.shape
+                ax.set_xticks(np.arange(0, w + 1, tick_step))
+                ax.set_yticks(np.arange(0, h + 1, tick_step))
+                ax.tick_params(axis="both", labelsize=9)
+
+        if self.show_colorbar:
+            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            if cbar_label:
+                cbar.set_label(cbar_label)
         return fig
 
     def save(self, fig: Any, path: str, *, dpi: int = 150) -> None:
