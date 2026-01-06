@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timedelta
+import numpy as np
 
 # Add the src directory to the Python path
 project_root = Path(__file__).parent.parent
@@ -34,6 +35,13 @@ from visualization import (
     MIN_FPS,
     MAX_FPS,
 )
+
+
+# --- Ignition control (no UI changes) ---
+# ignition_mode: 0 = manual (current behavior), 1 = validation-like multi-seed from mask
+DEFAULT_IGNITION_MODE = 0
+# How many seed points to ignite in validation mode (typically 1 or 3)
+DEFAULT_VALIDATION_SEED_POINTS = 3
 
 
 class SimulationRunner:
@@ -60,7 +68,9 @@ class SimulationRunner:
             width: int,
             height: int,
             cell_size: int,
-            fire_pos: Optional[tuple[int, int]]
+            fire_pos: Optional[tuple[int, int]],
+            ignition_mode: int = 0,
+            seed_points: int = 3,
     ) -> None:
         """Initialize the simulation runner.
 
@@ -82,6 +92,8 @@ class SimulationRunner:
         # Store initial parameters for reset
         self.width = width
         self.height = height
+        self.ignition_mode = int(ignition_mode or 0)
+        self.seed_points = int(seed_points or 3)
 
         # 1. Inicjalizacja Providera
         self.wind_provider = WindProvider(61.62453, 14.69939)
@@ -106,15 +118,18 @@ class SimulationRunner:
 
         self.initial_fire_pos = fire_pos
 
+        # Validation-like ignition seeds (computed once; reused on reset)
+        self.validation_seed_points: list[tuple[int, int]] = []
+
         # 4. Tworzenie modelu
         self.terrain = self._load_terrain(width, height)
-        self.model = FireModel(
-            width=width,
-            height=height,
-            wind_provider=self.wind_provider,
-            initial_fire_pos=fire_pos,
-            terrain=self.terrain
-        )
+
+        if self.ignition_mode == 1:
+            self.validation_seed_points = self._compute_validation_seed_points(max_points=self.seed_points)
+            if self.validation_seed_points:
+                self.initial_fire_pos = self.validation_seed_points[0]
+
+        self._reset_model()
 
         # --- NOWOŚĆ: Wstrzyknięcie mapy suszy do modelu ---
         # Dzięki temu model wie, jak bardzo jest sucho w danym dniu
@@ -143,6 +158,169 @@ class SimulationRunner:
         # Grid dimensions (for info panel)
         self.grid_height = height
         self.cell_size = cell_size
+
+    def _compute_validation_seed_points(self, max_points: int = 3) -> list[tuple[int, int]]:
+        """Compute ignition seed points like validation_run.
+
+        Uses IgnitionProcessor to rasterize the real boundary mask and (optionally)
+        compute a real ignition time grid. Then picks up to max_points seed points
+        (one per connected component) prioritizing earliest real ignition within
+        each component.
+
+        Falls back to empty list if required deps/files are missing.
+        """
+        if self.terrain is None:
+            return []
+
+        # Match defaults from validation/validation_run.py
+        fire_archive_path = project_root / "data" / "fire_archive_SV-C2_675228.json"
+        boundary_mask_path = project_root / "data" / "1a6cd4865f484fb48f8ba4ea97a6e0d1.json"
+
+        if not fire_archive_path.exists() or not boundary_mask_path.exists():
+            print("Brak plików walidacji (fire_archive/maska). Używam trybu ręcznego.")
+            return []
+
+        try:
+            from fire_spread.ignition_processor import IgnitionProcessor
+        except Exception as exc:
+            print(f"Nie można załadować IgnitionProcessor (brak zależności typu geopandas/scipy?): {exc}")
+            return []
+
+        try:
+            ip = IgnitionProcessor(self.terrain)
+            ip.load_and_prepare_data(str(fire_archive_path))
+            mask = ip.create_boundary_mask(str(boundary_mask_path)).astype(bool)
+            real_grid = ip.interpolate_ignition_time(method="linear")
+        except Exception as exc:
+            print(f"Nie udało się wyliczyć seedów walidacyjnych: {exc}. Używam trybu ręcznego.")
+            return []
+
+        seeds = self._pick_seed_points_from_mask(mask, real_grid=real_grid, max_points=max_points)
+
+        # Coordinate-system fix:
+        # - IgnitionProcessor / rasterio use row index with origin at top-left (row=0 at the top).
+        # - Mesa model uses (x, y) with origin at bottom-left.
+        # Convert seeds so they land in the same places you see in validation plots.
+        h = int(self.height)
+        converted = [(x, (h - 1 - y)) for (x, y) in seeds]
+
+        if converted:
+            print(f"[validation seeds] raw(top-left)={seeds} -> model(bottom-left)={converted}")
+        return converted
+
+    @staticmethod
+    def _pick_seed_points_from_mask(
+        mask: np.ndarray,
+        *,
+        real_grid: np.ndarray | None = None,
+        max_points: int = 3,
+    ) -> list[tuple[int, int]]:
+        """Pick up to max_points seed positions, one per connected component in mask.
+
+        Ported from validation/validation_run.py to keep seed selection consistent.
+        """
+        m = np.asarray(mask, dtype=bool)
+        if m.ndim != 2 or not np.any(m):
+            return []
+
+        use_real = (
+            real_grid is not None
+            and isinstance(real_grid, np.ndarray)
+            and real_grid.shape == m.shape
+        )
+        rg = real_grid if use_real else None
+
+        h, w = m.shape
+        visited = np.zeros((h, w), dtype=bool)
+        components: list[dict[str, object]] = []
+
+        true_ys, true_xs = np.where(m)
+        for y0, x0 in zip(true_ys.tolist(), true_xs.tolist()):
+            if visited[y0, x0]:
+                continue
+            stack = [(y0, x0)]
+            visited[y0, x0] = True
+            size = 0
+            sum_x = 0
+            sum_y = 0
+            best_t = float("inf")
+            best_pos: tuple[int, int] | None = None
+
+            while stack:
+                y, x = stack.pop()
+                size += 1
+                sum_x += x
+                sum_y += y
+
+                if rg is not None:
+                    t = float(rg[y, x])
+                    if np.isfinite(t) and t < best_t:
+                        best_t = t
+                        best_pos = (x, y)
+
+                # 4-neighborhood
+                if y > 0 and m[y - 1, x] and not visited[y - 1, x]:
+                    visited[y - 1, x] = True
+                    stack.append((y - 1, x))
+                if y + 1 < h and m[y + 1, x] and not visited[y + 1, x]:
+                    visited[y + 1, x] = True
+                    stack.append((y + 1, x))
+                if x > 0 and m[y, x - 1] and not visited[y, x - 1]:
+                    visited[y, x - 1] = True
+                    stack.append((y, x - 1))
+                if x + 1 < w and m[y, x + 1] and not visited[y, x + 1]:
+                    visited[y, x + 1] = True
+                    stack.append((y, x + 1))
+
+            centroid = (int(round(sum_x / max(size, 1))), int(round(sum_y / max(size, 1))))
+            seed = best_pos if best_pos is not None else centroid
+            components.append({"size": int(size), "seed": seed})
+
+        components.sort(key=lambda c: int(c["size"]), reverse=True)
+        return [tuple(c["seed"]) for c in components[: max(0, int(max_points))]]
+
+    def _ignite_seed(self, seed_pos: tuple[int, int]) -> tuple[int, int] | None:
+        """Ignite a single seed position, falling back to nearest burnable if needed."""
+        x, y = seed_pos
+        if not (0 <= x < self.model.grid.width and 0 <= y < self.model.grid.height):
+            return None
+        cell = self.model.grid[x][y]
+        current_ts = self.model.wind.get("timestamp", 0)
+
+        if getattr(cell, "is_burnable", None) and cell.is_burnable():
+            cell.state = CellState.Burning
+            cell.next_state = CellState.Burning
+            cell.burn_timer = int(cell.fuel.burn_time)
+            self.model.burning_cells.add((x, y))
+            self.model.ignition_time_grid[y, x] = current_ts
+            return (x, y)
+
+        fire_cell = self.model._find_nearest_burnable((x, y))
+        if fire_cell is None:
+            return None
+
+        fire_cell.state = CellState.Burning
+        fire_cell.next_state = CellState.Burning
+        fire_cell.burn_timer = int(fire_cell.fuel.burn_time)
+        self.model.burning_cells.add(fire_cell.pos)
+        fx, fy = fire_cell.pos
+        self.model.ignition_time_grid[fy, fx] = current_ts
+        return (fx, fy)
+
+    def _reset_model(self) -> None:
+        """(Re)create FireModel using current settings and re-apply extra ignition seeds."""
+        self.model = FireModel(
+            width=self.width,
+            height=self.height,
+            wind_provider=self.wind_provider,
+            initial_fire_pos=self.initial_fire_pos,
+            terrain=self.terrain,
+        )
+        self.model.htc_schedule = self.htc_schedule
+
+        if self.ignition_mode == 1 and self.validation_seed_points:
+            for extra_seed in self.validation_seed_points[1:]:
+                self._ignite_seed(extra_seed)
     
     def _handle_keyboard_events(self, event: pygame.event.Event) -> bool:
         """Handle keyboard input events.
@@ -161,14 +339,40 @@ class SimulationRunner:
         
         elif event.key == pygame.K_r:
             # Reset simulation with original parameters
-            self.model = FireModel(
-                width=self.width,
-                height=self.height,
-                wind_provider=self.wind_provider,
-                initial_fire_pos=self.initial_fire_pos,
-                terrain=self.terrain
-            )
-            self.model.htc_schedule = self.htc_schedule
+            self._reset_model()
+            self.paused = False
+            self.first_frame = True
+
+        elif event.key == pygame.K_v:
+            # Toggle ignition mode (manual <-> validation-like) and reset
+            self.ignition_mode = 0 if self.ignition_mode == 1 else 1
+            if self.ignition_mode == 1 and not self.validation_seed_points:
+                self.validation_seed_points = self._compute_validation_seed_points(max_points=self.seed_points)
+                if self.validation_seed_points:
+                    self.initial_fire_pos = self.validation_seed_points[0]
+            self._reset_model()
+            self.paused = False
+            self.first_frame = True
+
+        elif event.key == pygame.K_1:
+            # In validation mode: ignite only 1 seed (or prepare for it) and reset
+            self.seed_points = 1
+            if self.ignition_mode == 1:
+                self.validation_seed_points = self._compute_validation_seed_points(max_points=self.seed_points)
+                if self.validation_seed_points:
+                    self.initial_fire_pos = self.validation_seed_points[0]
+            self._reset_model()
+            self.paused = False
+            self.first_frame = True
+
+        elif event.key == pygame.K_3:
+            # In validation mode: ignite 3 seeds and reset
+            self.seed_points = 3
+            if self.ignition_mode == 1:
+                self.validation_seed_points = self._compute_validation_seed_points(max_points=self.seed_points)
+                if self.validation_seed_points:
+                    self.initial_fire_pos = self.validation_seed_points[0]
+            self._reset_model()
             self.paused = False
             self.first_frame = True
         
@@ -320,12 +524,7 @@ class SimulationRunner:
                     if hasattr(self.info_panel, "reset_button_rect") and \
                             self.info_panel.reset_button_rect.collidepoint(event.pos):
 
-                        self.model = FireModel(
-                            width=self.width,
-                            height=self.height,
-                            wind_provider=self.wind_provider,
-                            initial_fire_pos=self.initial_fire_pos
-                        )
+                        self._reset_model()
                         self.paused = False
                         self.first_frame = True
             
@@ -358,13 +557,22 @@ def main() -> None:
         width = params['width']
         height = params['height']
         cell_size = params['cell_size']
+        ignition_mode = DEFAULT_IGNITION_MODE
+        seed_points = DEFAULT_VALIDATION_SEED_POINTS
         # Handle fire position (None means auto-center in model)
         fire_pos = None
         if params['fire_x'] is not None and params['fire_y'] is not None:
             fire_pos = (params['fire_x'], params['fire_y'])
 
         # Run simulation
-        runner = SimulationRunner(width, height, cell_size, fire_pos)
+        runner = SimulationRunner(
+            width,
+            height,
+            cell_size,
+            fire_pos,
+            ignition_mode=ignition_mode,
+            seed_points=seed_points,
+        )
         result = runner.run()
 
         if result != "BACK_TO_MENU":

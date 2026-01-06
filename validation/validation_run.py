@@ -82,7 +82,7 @@ CONFIG: Dict[str, Any] = {
 	"steps_per_h": 1,         # simulation steps per meteo hour
 
 	# Model ignition / wind parameters
-	"p0": 0.1,
+	"p0": 0.4,
 	"wind_c1": 0.045,
 	"wind_c2": 0.1,
 	"spark_gust_threshold_kph": 40.0,
