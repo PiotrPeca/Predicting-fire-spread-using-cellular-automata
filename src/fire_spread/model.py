@@ -65,6 +65,8 @@ class FireModel(Model):
         self.wind_parametr_c1 = 0.05
         self.wind_parametr_c2 = 0.1
         self.ignition_time_grid = np.full((height, width), np.nan)
+
+        self.i = 0
         
         # Define fuel types
         self.fuel_types = FUEL_TYPES
@@ -191,6 +193,8 @@ class FireModel(Model):
         for agent in self.agents: #before for agent in self.agents.shuffle(): change to increase model speed
             agent.advance()
         #self.__str__() # Debug print current model state slows down the model a lot
+        print(f"Step no: {self.i}")
+        self.i+=1
     
     def _prepare_ignite_probabilities(self) -> None:
         """Compute ignition probabilities for the current step."""

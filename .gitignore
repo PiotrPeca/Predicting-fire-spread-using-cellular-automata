@@ -203,3 +203,7 @@ results/
 # Scientific article
 1-s2.0-S0096300308004943-main.pdf
 nhess-2018-227.pdf
+
+# Generated plots/output
+*.png
+*summary.json
